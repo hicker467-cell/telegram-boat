@@ -7,6 +7,17 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOGO_PATH = os.path.join(BASE_DIR, "logo.png")
 LOCAL_FONT_PATH = os.path.join(BASE_DIR, "nirmala.ttc")
 
+AVATAR_COLORS = [
+    (59, 130, 246),   # Blue
+    (16, 185, 129),   # Emerald
+    (245, 158, 11),   # Amber
+    (139, 92, 246),   # Purple
+    (236, 72, 153),   # Pink
+    (20, 184, 166),   # Teal
+    (239, 68, 68),    # Red
+    (99, 102, 241),   # Indigo
+]
+
 def get_font(size: int, is_bold: bool = False):
     """Safely loads Hindi/English compatible TrueType fonts across Windows and Linux."""
     candidates = [
@@ -23,6 +34,45 @@ def get_font(size: int, is_bold: bool = False):
             except Exception:
                 continue
     return ImageFont.load_default()
+
+def make_photo_avatar(photo_bytes, size=34):
+    """Crops real Telegram DP into a circular avatar with border."""
+    try:
+        im = Image.open(io.BytesIO(photo_bytes)).convert("RGBA")
+        min_dim = min(im.size)
+        left = (im.width - min_dim) // 2
+        top = (im.height - min_dim) // 2
+        im = im.crop((left, top, left + min_dim, top + min_dim))
+        im = im.resize((size, size), Image.Resampling.LANCZOS)
+        
+        mask = Image.new("L", (size, size), 0)
+        d = ImageDraw.Draw(mask)
+        d.ellipse((0, 0, size, size), fill=255)
+        
+        out = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        out.paste(im, (0, 0), mask=mask)
+        
+        # Subtle border ring
+        d_out = ImageDraw.Draw(out)
+        d_out.ellipse((0, 0, size - 1, size - 1), outline=(255, 255, 255, 180), width=1)
+        return out
+    except Exception:
+        return None
+
+def make_fallback_avatar(name: str, size=34, font=None):
+    """Draws a colorful initial badge when user has no Telegram profile photo."""
+    initial = (name.strip()[:1] if name.strip() else "S").upper()
+    color_idx = abs(hash(name)) % len(AVATAR_COLORS)
+    bg_color = AVATAR_COLORS[color_idx]
+
+    im = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.ellipse((0, 0, size, size), fill=bg_color)
+    d.ellipse((0, 0, size - 1, size - 1), outline=(255, 255, 255, 180), width=1)
+    
+    if font:
+        d.text((size // 2, size // 2), initial, font=font, fill=(255, 255, 255), anchor="mm")
+    return im
 
 def clean_test_title(raw_name: str) -> str:
     """Standardizes test name into a clean, professional English/Hindi title."""
@@ -56,7 +106,7 @@ def generate_result_card(
 ) -> io.BytesIO:
     """
     Generates a high-resolution, branded result card for Sagar Coaching Centre.
-    Displays Top 20 rankers out of total participating students.
+    Displays Top 20 rankers with circular Telegram DP avatars.
     """
     width = 1200
     row_height = 50
@@ -84,6 +134,7 @@ def generate_result_card(
     info_font = get_font(19, is_bold=True)
     th_font = get_font(18, is_bold=True)
     row_font = get_font(19, is_bold=False)
+    avatar_font = get_font(16, is_bold=True)
     book_font = get_font(19, is_bold=True)
     footer_contact_font = get_font(18, is_bold=False)
 
@@ -139,9 +190,9 @@ def generate_result_card(
     draw.rounded_rectangle([(table_x, th_y), (table_x + table_w, th_y + 38)], radius=6, fill=(30, 41, 59))
 
     # Columns:
-    # Rank (70px) | Name (430px) | Score (180px) | Accuracy (160px) | Avg Speed (180px)
+    # Rank (70px) | Avatar (40px) | Name (380px) | Score (180px) | Accuracy (160px) | Avg Speed (180px)
     draw.text((table_x + 35, th_y + 19), "RANK", font=th_font, fill=(148, 163, 184), anchor="mm")
-    draw.text((table_x + 95, th_y + 19), "STUDENT NAME", font=th_font, fill=(148, 163, 184), anchor="lm")
+    draw.text((table_x + 130, th_y + 19), "STUDENT NAME", font=th_font, fill=(148, 163, 184), anchor="lm")
     draw.text((table_x + 580, th_y + 19), "SCORE", font=th_font, fill=(148, 163, 184), anchor="mm")
     draw.text((table_x + 785, th_y + 19), "ACCURACY", font=th_font, fill=(148, 163, 184), anchor="mm")
     draw.text((table_x + 980, th_y + 19), "AVG SPEED", font=th_font, fill=(148, 163, 184), anchor="mm")
@@ -149,6 +200,8 @@ def generate_result_card(
     # Table Rows
     y = th_y + 45
     effective_total = attempted_q if (attempted_q and attempted_q > 0) else total_q
+
+    avatar_size = 34
 
     for i, student in enumerate(display_students):
         bg_color = (24, 32, 47) if i % 2 == 0 else (19, 26, 38)
@@ -168,11 +221,26 @@ def generate_result_card(
         rank_color = (234, 179, 8) if i < 3 else (203, 213, 225)
         draw.text((table_x + 35, y + (row_h // 2)), rank_text, font=row_font, fill=rank_color, anchor="mm")
 
-        # Name
+        # Name & Circular DP Avatar
         s_name = str(student.get("name", "Student")).strip()
-        if len(s_name) > 28:
-            s_name = s_name[:26] + ".."
-        draw.text((table_x + 95, y + (row_h // 2)), s_name, font=row_font, fill=(255, 255, 255), anchor="lm")
+        av_bytes = student.get("avatar_bytes")
+        av_img = None
+        if av_bytes:
+            av_img = make_photo_avatar(av_bytes, size=avatar_size)
+        if not av_img:
+            av_img = make_fallback_avatar(s_name, size=avatar_size, font=avatar_font)
+
+        # Paste circular avatar before name
+        av_x = table_x + 80
+        av_y = y + ((row_h - avatar_size) // 2)
+        img.paste(av_img, (av_x, av_y), mask=av_img.split()[3])
+
+        # Student Name text
+        display_name = s_name
+        if len(display_name) > 24:
+            display_name = display_name[:22] + ".."
+        name_x = av_x + avatar_size + 12
+        draw.text((name_x, y + (row_h // 2)), display_name, font=row_font, fill=(255, 255, 255), anchor="lm")
 
         # Score
         score_val = student.get("score", 0)

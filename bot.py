@@ -488,6 +488,38 @@ async def finish_group_quiz(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
     if scores:
         try:
             total_questions = session.get("total", attempted)
+
+            # Ensure user_id is populated for each player
+            for uid_k, p in scores.items():
+                if not p.get("user_id"):
+                    try: p["user_id"] = int(uid_k)
+                    except: pass
+
+            # Concurrently fetch Telegram profile photos for top 20 rankers
+            async def fetch_avatar(player):
+                uid = player.get("user_id")
+                if not uid:
+                    return
+                try:
+                    photos = await asyncio.wait_for(
+                        context.bot.get_user_profile_photos(user_id=int(uid), limit=1),
+                        timeout=2.0
+                    )
+                    if photos and photos.total_count > 0:
+                        photo_size = photos.photos[0][0]
+                        f = await asyncio.wait_for(
+                            context.bot.get_file(photo_size.file_id),
+                            timeout=2.0
+                        )
+                        buf = await f.download_as_bytearray()
+                        player["avatar_bytes"] = bytes(buf)
+                except Exception:
+                    player["avatar_bytes"] = None
+
+            avatar_tasks = [fetch_avatar(p) for p in sorted_players[:20]]
+            if avatar_tasks:
+                await asyncio.gather(*avatar_tasks, return_exceptions=True)
+
             image_buf = generate_result_card(
                 test_name=session["test_name"],
                 total_q=total_questions,
@@ -540,6 +572,7 @@ async def receive_quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
             if user.last_name:
                 full_name += f" {user.last_name}"
             g_scores[uid] = {
+                "user_id": user.id,
                 "name": full_name,
                 "score": 0,
                 "total_time": 0.0,
