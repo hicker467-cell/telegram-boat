@@ -14,7 +14,7 @@ from telegram.ext import (
     PollAnswerHandler,
     ContextTypes
 )
-from result_card import generate_result_card
+from result_card import generate_result_card, generate_topper_card
 
 # Logging configuration
 logging.basicConfig(
@@ -553,6 +553,35 @@ async def finish_group_quiz(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
                 photo=image_buf,
                 caption=caption
             )
+
+            # Send Personal Topper Certificate Cards for Top 3
+            topper_limit = min(3, len(sorted_players))
+            for rank_idx in range(topper_limit):
+                topper = sorted_players[rank_idx]
+                r_num = rank_idx + 1
+                try:
+                    topper_buf = generate_topper_card(
+                        student=topper,
+                        rank=r_num,
+                        test_name=session["test_name"],
+                        total_q=total_questions,
+                        attempted_q=attempted
+                    )
+                    medals_label = ["🥇 1st Rank Topper", "🥈 2nd Rank Topper", "🥉 3rd Rank Topper"][rank_idx]
+                    topper_name = str(topper.get("name", "Student")).replace('*', '').replace('_', '').strip()
+                    topper_caption = (
+                        f"🌟 {medals_label}: {topper_name}\n"
+                        f"🎯 Score: {topper['score']}/{attempted} | Accuracy: {topper.get('accuracy', 0)}%\n"
+                        "🏛️ Sagar Coaching Centre, Bhagwanpur\n"
+                        "📲 Topper Certificate: WhatsApp Status पर ज़रूर शेयर करें!"
+                    )
+                    await context.bot.send_photo(
+                        chat_id=chat_id,
+                        photo=topper_buf,
+                        caption=topper_caption
+                    )
+                except Exception as ex_topper:
+                    logger.error(f"Error sending topper card for rank {r_num}: {ex_topper}")
         except Exception as e:
             logger.error(f"Error generating or sending result card image: {e}")
 
@@ -764,7 +793,7 @@ def main():
     app.add_handler(PollAnswerHandler(receive_quiz_answer))
 
     print("✅ NMMS Quiz Bot is online and listening!")
-    app.run_polling()
+    app.run_polling(bootstrap_retries=-1)
 
 if __name__ == "__main__":
     main()
