@@ -5,7 +5,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOGO_PATH = os.path.join(BASE_DIR, "logo.png")
-LOCAL_FONT_PATH = os.path.join(BASE_DIR, "nirmala.ttc")
+LOCAL_HINDI_FONT = os.path.join(BASE_DIR, "nirmala.ttc")
+LOCAL_LATIN_FONT = os.path.join(BASE_DIR, "segoeuib.ttf")
 
 AVATAR_COLORS = [
     (59, 130, 246),   # Blue
@@ -18,14 +19,28 @@ AVATAR_COLORS = [
     (99, 102, 241),   # Indigo
 ]
 
-def get_font(size: int, is_bold: bool = False):
-    """Safely loads Hindi/English compatible TrueType fonts across Windows and Linux."""
+def get_latin_font(size: int, is_bold: bool = True):
+    """Loads crisp, modern typography for English titles, headers, and numbers."""
     candidates = [
-        LOCAL_FONT_PATH,
-        "C:/Windows/Fonts/Nirmala.ttc",
-        "C:/Windows/Fonts/arial.ttf",
+        LOCAL_LATIN_FONT,
+        "C:/Windows/Fonts/segoeuib.ttf" if is_bold else "C:/Windows/Fonts/segoeui.ttf",
+        "C:/Windows/Fonts/arialbd.ttf" if is_bold else "C:/Windows/Fonts/arial.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if is_bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf" if is_bold else "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            try:
+                return ImageFont.truetype(p, size)
+            except Exception:
+                continue
+    return ImageFont.load_default()
+
+def get_hindi_font(size: int, is_bold: bool = False):
+    """Loads clean Devanagari typography for Hindi text and student names."""
+    candidates = [
+        LOCAL_HINDI_FONT,
+        "C:/Windows/Fonts/Nirmala.ttc",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     ]
     for p in candidates:
         if os.path.exists(p):
@@ -52,7 +67,6 @@ def make_photo_avatar(photo_bytes, size=34):
         out = Image.new("RGBA", (size, size), (0, 0, 0, 0))
         out.paste(im, (0, 0), mask=mask)
         
-        # Subtle border ring
         d_out = ImageDraw.Draw(out)
         d_out.ellipse((0, 0, size - 1, size - 1), outline=(255, 255, 255, 180), width=1)
         return out
@@ -106,7 +120,7 @@ def generate_result_card(
 ) -> io.BytesIO:
     """
     Generates a high-resolution, branded result card for Sagar Coaching Centre.
-    Displays Top 20 rankers with circular Telegram DP avatars.
+    Displays Top 20 rankers with accurate accuracy percentages and premium typography.
     """
     width = 1200
     row_height = 50
@@ -123,20 +137,21 @@ def generate_result_card(
     table_y = header_height + meta_height + 15
     height = table_y + table_header_h + (num_rows * row_height) + footer_height
 
-    # Deep Slate/Navy Background
+    # Deep Navy Slate Canvas
     img = Image.new("RGB", (width, height), color=(15, 23, 42))
     draw = ImageDraw.Draw(img)
 
-    # Fonts
-    title_font = get_font(38, is_bold=True)
-    subtitle_font = get_font(21, is_bold=True)
-    author_font = get_font(18, is_bold=False)
-    info_font = get_font(19, is_bold=True)
-    th_font = get_font(18, is_bold=True)
-    row_font = get_font(19, is_bold=False)
-    avatar_font = get_font(16, is_bold=True)
-    book_font = get_font(19, is_bold=True)
-    footer_contact_font = get_font(18, is_bold=False)
+    # Modern Premium Fonts (Segoe UI for English / Numbers, Nirmala for Hindi)
+    title_font = get_latin_font(38, is_bold=True)
+    subtitle_font = get_latin_font(21, is_bold=True)
+    author_font = get_hindi_font(18, is_bold=False)
+    info_font = get_latin_font(19, is_bold=True)
+    th_font = get_latin_font(18, is_bold=True)
+    row_font = get_hindi_font(19, is_bold=False)
+    score_font = get_latin_font(19, is_bold=True)
+    avatar_font = get_hindi_font(16, is_bold=True)
+    book_font = get_hindi_font(19, is_bold=True)
+    footer_contact_font = get_hindi_font(18, is_bold=False)
 
     # Header Background
     draw.rectangle([(0, 0), (width, header_height)], fill=(24, 32, 47))
@@ -167,7 +182,7 @@ def generate_result_card(
 
     draw.text((text_x, 46), "SAGAR COACHING CENTRE", font=title_font, fill=(255, 255, 255), anchor=align_mode)
     draw.text((text_x, 94), sub_text, font=subtitle_font, fill=(234, 179, 8), anchor=align_mode)
-    draw.text((text_x, 138), "📍 Bhagwanpur (Supaul, Bihar)   |   ✍️ Sagar Sir (7+ Years Experience)", font=author_font, fill=(148, 163, 184), anchor=align_mode)
+    draw.text((text_x, 138), "📍 Bhagwanpur (Supaul, Bihar)   |   ✍️ सागर सर (7+ वर्ष का अनुभव)", font=author_font, fill=(148, 163, 184), anchor=align_mode)
 
     # Meta Bar (Test Details)
     meta_box_y = header_height + 15
@@ -219,7 +234,7 @@ def generate_result_card(
         medals = ["🥇 #1", "🥈 #2", "🥉 #3"]
         rank_text = medals[i] if i < len(medals) else f"#{i+1}"
         rank_color = (234, 179, 8) if i < 3 else (203, 213, 225)
-        draw.text((table_x + 35, y + (row_h // 2)), rank_text, font=row_font, fill=rank_color, anchor="mm")
+        draw.text((table_x + 35, y + (row_h // 2)), rank_text, font=score_font, fill=rank_color, anchor="mm")
 
         # Name & Circular DP Avatar
         s_name = str(student.get("name", "Student")).strip()
@@ -244,19 +259,21 @@ def generate_result_card(
 
         # Score
         score_val = student.get("score", 0)
-        draw.text((table_x + 580, y + (row_h // 2)), f"{score_val} / {effective_total}", font=row_font, fill=(56, 189, 248), anchor="mm")
+        draw.text((table_x + 580, y + (row_h // 2)), f"{score_val} / {effective_total}", font=score_font, fill=(56, 189, 248), anchor="mm")
 
-        # Accuracy (%)
-        pct = (score_val / effective_total * 100) if effective_total > 0 else 0
-        draw.text((table_x + 785, y + (row_h // 2)), f"{pct:.1f}%", font=row_font, fill=(74, 222, 128), anchor="mm")
+        # Accuracy (%) — accurately calculated per student
+        pct = student.get("accuracy")
+        if pct is None:
+            pct = (score_val / effective_total * 100) if effective_total > 0 else 0
+        draw.text((table_x + 785, y + (row_h // 2)), f"{pct:.1f}%", font=score_font, fill=(74, 222, 128), anchor="mm")
 
         # Avg Speed
         avg_time = student.get("avg_time", 0.0)
-        draw.text((table_x + 980, y + (row_h // 2)), f"{avg_time:.1f}s / Q", font=row_font, fill=(244, 114, 182), anchor="mm")
+        draw.text((table_x + 980, y + (row_h // 2)), f"{avg_time:.1f}s / Q", font=score_font, fill=(244, 114, 182), anchor="mm")
 
         y += row_height
 
-    # Footer Branding
+    # Footer Branding (Zero mention of "order" / clean and prestigious)
     footer_box_y = height - 85
     draw.line([(50, footer_box_y), (width - 50, footer_box_y)], fill=(51, 65, 85), width=1)
     

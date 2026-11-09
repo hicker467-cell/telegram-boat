@@ -160,7 +160,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🎓 NMMS टेस्ट कंट्रोल पैनल\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             "✍️ पुस्तक लेखक: सागर सर (NMMS एक्सपर्ट)\n"
-            "📞 पुस्तक ऑर्डर एवं संपर्क: +91 91101 13671\n\n"
+            "📞 संपर्क / WhatsApp: +91 91101 13671\n\n"
             "यहाँ से सेट चुनें और सीधे कोचिंग ग्रुप में शुरू करें:\n"
             "• 🧠 MAT: 90 प्रश्न (60s / प्रश्न)\n"
             "• 📚 SAT: 90 प्रश्न (35 वि. + 35 सा.वि. + 20 गणित) (60s / प्रश्न)\n"
@@ -434,7 +434,14 @@ async def finish_group_quiz(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
     if not session:
         return
 
-    attempted = session["current_index"]
+    current_idx = session.get("current_index", 0)
+    # If active poll was sent, that question counts as attempted
+    if session.get("active_poll_id"):
+        attempted = current_idx + 1
+    else:
+        attempted = current_idx
+    attempted = max(attempted, 1)
+
     scores = session.get("group_scores", {})
 
     if not scores:
@@ -445,11 +452,18 @@ async def finish_group_quiz(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
             "⚠️ किसी भी छात्र का स्कोर दर्ज नहीं हुआ।"
         )
     else:
-        # Calculate speed (avg time per correct answer)
+        # Calculate accurate speed and accuracy per student
         for p in scores.values():
             c = p.get("correct_count", p.get("score", 0))
+            ans = p.get("answered_count", c)
+            if ans < c:
+                ans = c
+            p["answered_count"] = ans
+            # Accuracy is percentage of answered questions that were correct
+            p["accuracy"] = round((c / ans) * 100, 1) if ans > 0 else 0.0
+            # Speed is average time per question answered
             t = p.get("total_time", 0.0)
-            p["avg_time"] = round(t / c, 1) if c > 0 else 60.0
+            p["avg_time"] = round(t / ans, 1) if ans > 0 else 60.0
 
         # Sort: Score descending, tie-breaker: Total response time ascending (Fastest Finger First)
         sorted_players = sorted(
@@ -469,10 +483,10 @@ async def finish_group_quiz(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
         )
         for i, p in enumerate(sorted_players[:10]):
             m = medals[i] if i < len(medals) else f"#{i+1}"
-            pct = (p["score"] / attempted * 100) if attempted > 0 else 0
+            pct = p.get("accuracy", 0.0)
             avg_t = p.get("avg_time", 0.0)
             clean_name = str(p.get("name", "Student")).replace('*', '').replace('_', '').replace('`', '').strip()
-            result_msg += f"{m} {clean_name} — {p['score']}/{attempted} ({pct:.0f}% | ⏱️ {avg_t}s avg)\n"
+            result_msg += f"{m} {clean_name} — {p['score']}/{attempted} ({pct:.1f}% | ⏱️ {avg_t}s avg)\n"
         
         result_msg += (
             "━━━━━━━━━━━━━━━━━━━━\n"
@@ -576,12 +590,17 @@ async def receive_quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
                 "name": full_name,
                 "score": 0,
                 "total_time": 0.0,
-                "correct_count": 0
+                "correct_count": 0,
+                "answered_count": 0
             }
+
+        # Track every attempted answer and elapsed time
+        g_scores[uid]["answered_count"] = g_scores[uid].get("answered_count", 0) + 1
+        g_scores[uid]["total_time"] = g_scores[uid].get("total_time", 0.0) + elapsed
+
         if is_correct:
             g_scores[uid]["score"] += 1
             g_scores[uid]["correct_count"] = g_scores[uid].get("correct_count", 0) + 1
-            g_scores[uid]["total_time"] = g_scores[uid].get("total_time", 0.0) + elapsed
 
 # Command /stop in group
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -670,8 +689,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "   • ग्रुप एडमिन सीधे /quiz लिखकर टेस्ट शुरू कर सकते हैं।\n"
         "   • हर प्रश्न पर 60 सेकंड का समय मिलेगा।\n"
         "   • टेस्ट रोकने के लिए एडमिन /stop भेज सकते हैं।\n\n"
-        "📖 NMMS स्पेशल गाइड बुक (लेखक: सागर सर)\n"
-        "📦 पुस्तक ऑर्डर हेतु संपर्क: 📞 +91 91101 13671"
+        "📖 NMMS स्पेशल गाइड बुक (लेखक: सागर सर - 7+ वर्ष अनुभव)\n"
+        "🏛️ सागर कोचिंग सेन्टर, भगवानपुर | 📞 संपर्क: +91 91101 13671"
     )
     if update.message:
         await update.message.reply_text(help_text)

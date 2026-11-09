@@ -9,7 +9,7 @@ Official Bot for **Sagar Coaching Centre**, Bhagwanpur (Supaul, Bihar).
 - **Author & Mentor:** Sagar Sir (NMMS Expert)
 - **Book Sourced:** All 1,150+ questions are directly sourced from the official NMMS Special Guide Book authored by Sagar Sir.
 - **Top 20 Merit Card:** Automatically generates a branded high-resolution Top 20 Result Card image at the end of each test for sharing on WhatsApp Status & Groups.
-- **Book Orders & Admissions:** 📞 +91 91101 13671
+- **Coaching & Inquiries:** 📞 +91 91101 13671
 
 ---
 
