@@ -1,0 +1,714 @@
+import os
+import json
+import random
+import asyncio
+import time
+import logging
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
+from telegram import Update, Poll, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    CallbackQueryHandler,
+    PollAnswerHandler,
+    ContextTypes
+)
+from result_card import generate_result_card
+
+# Logging configuration
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+# Paths
+BASE_DIR = Path(__file__).resolve().parent
+DATABASE_FILE = BASE_DIR / "questions_db.json"
+SCORES_FILE = BASE_DIR / "scores.json"
+BOT_TOKEN = os.getenv("BOT_TOKEN", "9293701349:AAGmkCZPDO8Sxs1xDdCyEY7gz-fuV0kK5cI")
+BOT_USERNAME = "sudhir_quiz_bot"
+
+def parse_compound(text: str, prefix: str):
+    """Safely extracts key and set even when key contains underscores like Social_Science or Mental_Ability."""
+    if text.startswith(prefix + '__'):
+        parts = text[len(prefix + '__'):].split('__')
+        if len(parts) >= 2:
+            return parts[0], parts[1]
+    elif text.startswith(prefix + '_'):
+        raw = text[len(prefix + '_'):]
+        for pattern in ['_set_', '_mat_', '_sat_']:
+            if pattern in raw:
+                idx = raw.rfind(pattern)
+                return raw[:idx], raw[idx+1:]
+        parts = raw.split('_', 1)
+        if len(parts) == 2:
+            return parts[0], parts[1]
+    return None, None
+
+def load_database():
+    if DATABASE_FILE.exists():
+        with open(DATABASE_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {"full_mocks": {}, "subjects": {}}
+
+def load_scores():
+    if SCORES_FILE.exists():
+        try:
+            with open(SCORES_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def save_scores(scores):
+    with open(SCORES_FILE, "w", encoding="utf-8") as f:
+        json.dump(scores, f, ensure_ascii=False, indent=2)
+
+def update_user_score(user, is_correct):
+    scores = load_scores()
+    uid = str(user.id)
+    name = user.first_name or "Student"
+    if user.last_name:
+        name += f" {user.last_name}"
+    
+    if uid not in scores:
+        scores[uid] = {
+            "name": name,
+            "username": user.username or "",
+            "quizzes_played": 0,
+            "total_questions": 0,
+            "correct_answers": 0
+        }
+
+    scores[uid]["name"] = name
+    if user.username:
+        scores[uid]["username"] = user.username
+
+    scores[uid]["total_questions"] += 1
+    if is_correct:
+        scores[uid]["correct_answers"] += 1
+
+    save_scores(scores)
+
+def shuffle_question_options(q):
+    original_options = q["options"]
+    correct_text = original_options[q["correct_option_id"]]
+    indexed = list(enumerate(original_options))
+    random.shuffle(indexed)
+    new_options = [opt for _, opt in indexed]
+    new_correct_id = new_options.index(correct_text)
+    return {
+        "question": q["question"],
+        "options": new_options,
+        "correct_option_id": new_correct_id,
+        "explanation": q.get("explanation", ""),
+        "subject": q.get("subject", "")
+    }
+
+async def is_group_admin(chat, user_id: int) -> bool:
+    """Verifies if the user is a group administrator or creator."""
+    if chat.type not in ["group", "supergroup"]:
+        return True
+    try:
+        member = await chat.get_member(user_id)
+        return member.status in ["creator", "administrator"]
+    except Exception:
+        return False
+
+# Start command
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    user = update.effective_user
+    is_group = chat.type in ["group", "supergroup"]
+
+    # Security: If in group, only group admins are allowed to launch or see start menus!
+    if is_group:
+        if not await is_group_admin(chat, user.id):
+            if context.args and len(context.args) > 0:
+                await update.message.reply_text("⚠️ केवल ग्रुप एडमिन ही टेस्ट शुरू कर सकते हैं!")
+            return
+
+    # When launched via "Start in Group" button by an admin:
+    if is_group and context.args and len(context.args) > 0:
+        arg = context.args[0]
+        if arg.startswith("mock"):
+            mock_type, set_key = parse_compound(arg, "mock")
+            if mock_type and set_key:
+                await start_group_quiz(chat.id, user, "mock", mock_type, set_key, context)
+                return
+        elif arg.startswith("subj"):
+            subject_key, set_key = parse_compound(arg, "subj")
+            if subject_key and set_key:
+                await start_group_quiz(chat.id, user, "subject", subject_key, set_key, context)
+                return
+
+    if is_group:
+        welcome_text = (
+            "🏛️ SAGAR COACHING CENTRE\n"
+            "🎓 NMMS लाइव टेस्ट पोर्टल\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "✍️ पुस्तक लेखक: सागर सर (NMMS एक्सपर्ट)\n"
+            "⏱️ प्रत्येक प्रश्न: 60 सेकंड\n"
+            "🏆 टेस्ट समाप्ति पर टॉप 20 छात्रों की मेरिट लिस्ट जारी होगी।\n\n"
+            "👇 नीचे से टेस्ट सेट चुनें:"
+        )
+    else:
+        welcome_text = (
+            "🏛️ SAGAR COACHING CENTRE\n"
+            "🎓 NMMS टेस्ट कंट्रोल पैनल\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "✍️ पुस्तक लेखक: सागर सर (NMMS एक्सपर्ट)\n"
+            "📞 पुस्तक ऑर्डर एवं संपर्क: +91 91101 13671\n\n"
+            "यहाँ से सेट चुनें और सीधे कोचिंग ग्रुप में शुरू करें:\n"
+            "• 🧠 MAT: 90 प्रश्न (60s / प्रश्न)\n"
+            "• 📚 SAT: 90 प्रश्न (35 वि. + 35 सा.वि. + 20 गणित) (60s / प्रश्न)\n"
+            "• 🔬 विषयवार अभ्यास: 50 प्रश्न प्रति सेट (60s / प्रश्न)\n\n"
+            "👇 नीचे से टेस्ट चुनें:"
+        )
+
+    keyboard = [
+        # Full 90Q Mocks
+        [InlineKeyboardButton("🧠 MAT फुल मॉक टेस्ट (90 प्रश्न | 60s)", callback_data="menu_mock_MAT")],
+        [InlineKeyboardButton("📚 SAT फुल मॉक टेस्ट (90 प्रश्न | 60s)", callback_data="menu_mock_SAT")],
+        # Subject wise practice
+        [
+            InlineKeyboardButton("🔬 विज्ञान (50 Q)", callback_data="subj_Science"),
+            InlineKeyboardButton("🌍 सा. विज्ञान (50 Q)", callback_data="subj_Social_Science")
+        ],
+        [
+            InlineKeyboardButton("🧠 तर्कशक्ति / MAT (50 Q)", callback_data="subj_Mental_Ability"),
+            InlineKeyboardButton("📐 गणित (50 Q)", callback_data="subj_Mathematics")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    if update.message:
+        await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode="Markdown")
+    elif update.callback_query:
+        await update.callback_query.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode="Markdown")
+
+# Show Mock Sets
+async def show_mock_sets(query, mock_type: str):
+    db = load_database()
+    mocks = db.get("full_mocks", {})
+    mock_data = mocks.get(mock_type)
+    if not mock_data:
+        await query.message.reply_text("⚠️ मॉक टेस्ट नहीं मिला!")
+        return
+
+    name = mock_data["name"]
+    sets = mock_data.get("sets", {})
+    chat = query.message.chat
+    is_group = chat.type in ["group", "supergroup"]
+
+    pattern_info = "90 प्रश्न (तर्कशक्ति)" if mock_type == "MAT" else "90 प्रश्न (35 वि. + 35 सा.वि. + 20 गणित)"
+
+    text = (
+        "🏛️ SAGAR COACHING CENTRE\n"
+        f"📝 {name}\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"⏱️ समय: 60s / प्रश्न | 📋 पैटर्न: {pattern_info}\n\n"
+        "👇 जो सेट शुरू करना है, उसे चुनें:"
+    )
+
+    keyboard = []
+    for set_key, set_info in sets.items():
+        if is_group:
+            # If directly in group, start right away
+            keyboard.append([
+                InlineKeyboardButton(f"▶️ {set_info['name']} शुरू करें", callback_data=f"startmock__{mock_type}__{set_key}")
+            ])
+        else:
+            # In DM: show set button which leads to "Start in Group"
+            keyboard.append([
+                InlineKeyboardButton(f"📝 {set_info['name']}", callback_data=f"setselect_mock__{mock_type}__{set_key}")
+            ])
+
+    keyboard.append([InlineKeyboardButton("🔙 मुख्य मेनू", callback_data="btn_back_subjects")])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await query.message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+
+# Final Selection in DM: ONLY shows "Start in Group"
+async def show_group_starter_card(query, test_type: str, group_key: str, set_key: str):
+    db = load_database()
+    if test_type == "mock":
+        set_info = db.get("full_mocks", {}).get(group_key, {}).get("sets", {}).get(set_key)
+        deep_param = f"mock__{group_key}__{set_key}"
+    else:
+        set_info = db.get("subjects", {}).get(group_key, {}).get("sets", {}).get(set_key)
+        deep_param = f"subj__{group_key}__{set_key}"
+
+    if not set_info:
+        await query.message.reply_text("⚠️ सेट नहीं मिला!")
+        return
+
+    q_count = len(set_info.get("questions", []))
+    text = (
+        "🏛️ SAGAR COACHING CENTRE\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"📝 {set_info['name']}\n"
+        f"❓ कुल प्रश्न: {q_count} | ⏱️ समय: 60s / प्रश्न\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "👉 नीचे बटन दबाकर कोचिंग ग्रुप चुनें और टेस्ट शुरू करें:"
+    )
+
+    group_url = f"https://t.me/{BOT_USERNAME}?startgroup={deep_param}"
+
+    keyboard = [
+        [InlineKeyboardButton("👥 Start in Group (ग्रुप चुनें और शुरू करें)", url=group_url)],
+        [InlineKeyboardButton("🔙 दूसरा सेट चुनें", callback_data=f"menu_mock_{group_key}" if test_type == "mock" else f"subj_{group_key}")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await query.message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+
+# Subject practice sets
+async def show_subject_sets(query, subject_key: str):
+    db = load_database()
+    subjects = db.get("subjects", {})
+    subj_data = subjects.get(subject_key)
+    if not subj_data:
+        await query.message.reply_text("⚠️ विषय नहीं मिला!")
+        return
+
+    subj_name = subj_data["name"]
+    sets = subj_data.get("sets", {})
+    chat = query.message.chat
+    is_group = chat.type in ["group", "supergroup"]
+
+    text = (
+        "🏛️ SAGAR COACHING CENTRE\n"
+        f"📝 {subj_name}\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "⏱️ समय: 60s / प्रश्न (50 प्रश्न प्रति सेट)\n\n"
+        "👇 जो सेट शुरू करना है, उसे चुनें:"
+    )
+
+    keyboard = []
+    set_buttons = []
+    for set_key, set_info in sets.items():
+        short_label = set_info['name'].split(" - ")[0]
+        if is_group:
+            cb = f"startsubj__{subject_key}__{set_key}"
+        else:
+            cb = f"setselect_subj__{subject_key}__{set_key}"
+            
+        set_buttons.append(
+            InlineKeyboardButton(f"📝 {short_label}", callback_data=cb)
+        )
+
+    for i in range(0, len(set_buttons), 2):
+        keyboard.append(set_buttons[i:i+2])
+
+    keyboard.append([InlineKeyboardButton("🔙 मुख्य मेनू", callback_data="btn_back_subjects")])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await query.message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+
+# Start Group Quiz immediately
+async def start_group_quiz(chat_id: int, user, session_type: str, group_key: str, set_key: str, context: ContextTypes.DEFAULT_TYPE):
+    db = load_database()
+    if session_type == "mock":
+        group_data = db.get("full_mocks", {}).get(group_key, {})
+    else:
+        group_data = db.get("subjects", {}).get(group_key, {})
+
+    if not group_data:
+        await context.bot.send_message(chat_id=chat_id, text="⚠️ टेस्ट समूह नहीं मिला!")
+        return
+
+    sets = group_data.get("sets", {})
+    set_info = sets.get(set_key)
+    if not set_info or not set_info.get("questions"):
+        await context.bot.send_message(chat_id=chat_id, text="⚠️ इस सेट में कोई सवाल नहीं मिला!")
+        return
+
+    questions = list(set_info["questions"])
+    random.shuffle(questions)
+    shuffled_questions = [shuffle_question_options(q) for q in questions]
+
+    timer_seconds = 60
+
+    session = {
+        "chat_id": chat_id,
+        "is_group": True,
+        "started_by": getattr(user, "first_name", "Admin"),
+        "test_name": set_info["name"],
+        "timer_seconds": timer_seconds,
+        "questions": shuffled_questions,
+        "current_index": 0,
+        "total": len(shuffled_questions),
+        "group_scores": {},
+        "active_poll_id": None
+    }
+
+    context.bot_data.setdefault("group_sessions", {})[chat_id] = session
+
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=(
+            "🏛️ SAGAR COACHING CENTRE\n"
+            "🎓 NMMS छात्रवृत्ति महा-अभ्यास\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"📝 {set_info['name']}\n"
+            f"❓ कुल प्रश्न: {len(shuffled_questions)} | ⏱️ समय: 60s प्रति प्रश्न\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "⚡ पहला प्रश्न आ रहा है, सभी छात्र तैयार रहें!"
+        )
+    )
+
+    await asyncio.sleep(2.0)
+    await send_next_group_question(chat_id, context)
+
+# Send next question in group
+async def send_next_group_question(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
+    session = context.bot_data.get("group_sessions", {}).get(chat_id)
+    if not session:
+        return
+
+    idx = session["current_index"]
+    questions = session["questions"]
+    total = session["total"]
+
+    if idx >= total:
+        await finish_group_quiz(chat_id, context)
+        return
+
+    q = questions[idx]
+    timer = 60
+
+    q_title = f"Q{idx + 1}/{total}: {q['question']}"
+    if len(q_title) > 300:
+        q_title = q_title[:297] + "..."
+
+    clean_options = [opt[:100] if len(opt) > 100 else opt for opt in q["options"]]
+
+    try:
+        message = await context.bot.send_poll(
+            chat_id=chat_id,
+            question=q_title,
+            options=clean_options,
+            type=Poll.QUIZ,
+            correct_option_id=q["correct_option_id"],
+            explanation=q.get("explanation", "")[:200],
+            is_anonymous=False,
+            open_period=timer
+        )
+
+        poll_id = message.poll.id
+        session["active_poll_id"] = poll_id
+
+        context.bot_data.setdefault("active_polls", {})[poll_id] = {
+            "chat_id": chat_id,
+            "correct_option_id": q["correct_option_id"],
+            "question_index": idx,
+            "sent_at": time.time()
+        }
+
+        # Start 60s round timer for group
+        asyncio.create_task(group_question_timer(chat_id, poll_id, idx, timer, context))
+
+    except Exception as e:
+        logger.error(f"Error sending poll in group: {e}")
+        session["current_index"] += 1
+        await send_next_group_question(chat_id, context)
+
+# Background timer for group
+async def group_question_timer(chat_id: int, poll_id: str, round_idx: int, wait_seconds: int, context: ContextTypes.DEFAULT_TYPE):
+    await asyncio.sleep(wait_seconds + 1.5)
+
+    session = context.bot_data.get("group_sessions", {}).get(chat_id)
+    if not session:
+        return
+
+    if session.get("active_poll_id") == poll_id and session.get("current_index") == round_idx:
+        session["current_index"] += 1
+        await send_next_group_question(chat_id, context)
+
+# Finish Group Quiz
+async def finish_group_quiz(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
+    session = context.bot_data.get("group_sessions", {}).pop(chat_id, None)
+    if not session:
+        return
+
+    attempted = session["current_index"]
+    scores = session.get("group_scores", {})
+
+    if not scores:
+        result_msg = (
+            "🏛️ SAGAR COACHING CENTRE\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏁 टेस्ट समाप्त: {session['test_name']}\n\n"
+            "⚠️ किसी भी छात्र का स्कोर दर्ज नहीं हुआ।"
+        )
+    else:
+        # Calculate speed (avg time per correct answer)
+        for p in scores.values():
+            c = p.get("correct_count", p.get("score", 0))
+            t = p.get("total_time", 0.0)
+            p["avg_time"] = round(t / c, 1) if c > 0 else 60.0
+
+        # Sort: Score descending, tie-breaker: Total response time ascending (Fastest Finger First)
+        sorted_players = sorted(
+            scores.values(),
+            key=lambda x: (-x["score"], x.get("total_time", 999999))
+        )
+        medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+
+        result_msg = (
+            "🏛️ SAGAR COACHING CENTRE\n"
+            "🏆 NMMS महा-अभ्यास: मेरिट लिस्ट (Top Rankers)\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"📝 टेस्ट: {session['test_name']} | कुल प्रश्न: {attempted}\n\n"
+        )
+        for i, p in enumerate(sorted_players[:10]):
+            m = medals[i] if i < len(medals) else f"#{i+1}"
+            pct = (p["score"] / attempted * 100) if attempted > 0 else 0
+            avg_t = p.get("avg_time", 0.0)
+            clean_name = str(p.get("name", "Student")).replace('*', '').replace('_', '').replace('`', '').strip()
+            result_msg += f"{m} {clean_name} — {p['score']}/{attempted} ({pct:.0f}% | ⏱️ {avg_t}s avg)\n"
+        
+        result_msg += (
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "📖 ये सभी प्रश्न 'सागर सर' द्वारा लिखित NMMS स्पेशल बुक से लिए गए हैं।\n"
+            "📦 संपूर्ण तैयारी हेतु पुस्तक ऑर्डर करें: 📞 +91 91101 13671\n"
+            "👏 शानदार प्रदर्शन करने वाले सभी छात्रों को बधाई!"
+        )
+
+    # Send text leaderboard (plain text - clean without raw markdown stars)
+    await context.bot.send_message(chat_id=chat_id, text=result_msg)
+
+    # Send Image Result Card if there were scores
+    if scores:
+        try:
+            total_questions = session.get("total", attempted)
+            image_buf = generate_result_card(
+                test_name=session["test_name"],
+                total_q=total_questions,
+                top_students=sorted_players,
+                attempted_q=attempted
+            )
+            caption = (
+                "🏆 NMMS Official Merit Card (Top Rankers)\n"
+                "🏛️ Sagar Coaching Centre, Bhagwanpur (Supaul)\n"
+                "📖 NMMS Special Guide Book by Sagar Sir\n"
+                "📦 पुस्तक ऑर्डर एवं जानकारी: 📞 +91 91101 13671\n"
+                "📲 WhatsApp Status पर अवश्य शेयर करें!"
+            )
+            await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=image_buf,
+                caption=caption
+            )
+        except Exception as e:
+            logger.error(f"Error generating or sending result card image: {e}")
+
+# Handle Poll Answer in group
+async def receive_quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    answer = update.poll_answer
+    poll_id = answer.poll_id
+    user = answer.user
+
+    active_polls = context.bot_data.get("active_polls", {})
+    poll_info = active_polls.get(poll_id)
+
+    if not poll_info:
+        return
+
+    chat_id = poll_info["chat_id"]
+    correct_id = poll_info["correct_option_id"]
+    sent_at = poll_info.get("sent_at", time.time())
+    elapsed = max(0.5, round(time.time() - sent_at, 1))
+
+    is_correct = bool(answer.option_ids and answer.option_ids[0] == correct_id)
+
+    update_user_score(user=user, is_correct=is_correct)
+
+    session = context.bot_data.get("group_sessions", {}).get(chat_id)
+    if session:
+        g_scores = session["group_scores"]
+        uid = str(user.id)
+        if uid not in g_scores:
+            full_name = user.first_name or "Student"
+            if user.last_name:
+                full_name += f" {user.last_name}"
+            g_scores[uid] = {
+                "name": full_name,
+                "score": 0,
+                "total_time": 0.0,
+                "correct_count": 0
+            }
+        if is_correct:
+            g_scores[uid]["score"] += 1
+            g_scores[uid]["correct_count"] = g_scores[uid].get("correct_count", 0) + 1
+            g_scores[uid]["total_time"] = g_scores[uid].get("total_time", 0.0) + elapsed
+
+# Command /stop in group
+async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    user = update.effective_user
+
+    # Security check: only group admin can stop
+    if chat.type in ["group", "supergroup"]:
+        if not await is_group_admin(chat, user.id):
+            await update.message.reply_text("⚠️ केवल ग्रुप एडमिन ही टेस्ट रोक सकते हैं!")
+            return
+
+    session = context.bot_data.get("group_sessions", {}).get(chat.id)
+    if not session:
+        await update.message.reply_text("ℹ️ इस ग्रुप में कोई एक्टिव क्विज़ नहीं चल रहा है। नया शुरू करने के लिए `/quiz` लिखें।")
+        return
+
+    await update.message.reply_text("🛑 टेस्ट बीच में रोक दिया गया है। परिणाम:")
+    await finish_group_quiz(chat.id, context)
+
+# Command /quiz
+async def quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await start_command(update, context)
+
+# Stats command
+async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    scores = load_scores()
+    uid = str(user.id)
+    u_data = scores.get(uid)
+
+    if not u_data:
+        text = "📊 आपने अभी तक किसी टेस्ट में भाग नहीं लिया है। क्विज़ शुरू करने के लिए `/quiz` लिखें!"
+    else:
+        total_q = u_data.get("total_questions", 0)
+        correct_q = u_data.get("correct_answers", 0)
+        acc = (correct_q / total_q * 100) if total_q > 0 else 0
+        text = (
+            f"📊 {user.first_name} के NMMS Stats:\n\n"
+            f"❓ कुल प्रश्न हल किए: {total_q}\n"
+            f"✅ सही उत्तर: {correct_q}\n"
+            f"🎯 एक्यूरेसी (Accuracy): {acc:.1f}%"
+        )
+
+    if update.message:
+        await update.message.reply_text(text)
+    elif update.callback_query:
+        try: await update.callback_query.answer()
+        except: pass
+        await update.callback_query.message.reply_text(text)
+
+# Leaderboard command
+async def leaderboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    scores = load_scores()
+    if not scores:
+        text = "🏆 अभी तक कोई स्कोर रिकॉर्ड नहीं हुआ है।"
+    else:
+        sorted_users = sorted(scores.values(), key=lambda x: x.get("correct_answers", 0), reverse=True)[:10]
+        medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+
+        text = "🏆 NMMS All-Time Top Rankers:\n\n"
+        for i, u in enumerate(sorted_users):
+            medal = medals[i] if i < len(medals) else f"#{i+1}"
+            name = str(u.get("name", "Unknown")).replace('*', '').replace('_', '')
+            correct = u.get("correct_answers", 0)
+            text += f"{medal} {name} — {correct} सही उत्तर\n"
+
+    keyboard = [[InlineKeyboardButton("🔙 मुख्य मेनू", callback_data="btn_back_subjects")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    if update.message:
+        await update.message.reply_text(text, reply_markup=reply_markup)
+    elif update.callback_query:
+        try: await update.callback_query.answer()
+        except: pass
+        await update.callback_query.message.reply_text(text, reply_markup=reply_markup)
+
+# Help command
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    help_text = (
+        "ℹ️ SAGAR COACHING CENTRE - NMMS Quiz Portal सहायता:\n\n"
+        "1. प्राइवेट चैट में:\n"
+        "   • /quiz दबाएँ और अपना सेट चुनें।\n"
+        "   • फिर '👥 Start in Group' दबाकर कोचिंग ग्रुप चुनें। क्विज़ सीधे उस ग्रुप में शुरू हो जाएगा!\n\n"
+        "2. ग्रुप में:\n"
+        "   • ग्रुप एडमिन सीधे /quiz लिखकर टेस्ट शुरू कर सकते हैं।\n"
+        "   • हर प्रश्न पर 60 सेकंड का समय मिलेगा।\n"
+        "   • टेस्ट रोकने के लिए एडमिन /stop भेज सकते हैं।\n\n"
+        "📖 NMMS स्पेशल गाइड बुक (लेखक: सागर सर)\n"
+        "📦 पुस्तक ऑर्डर हेतु संपर्क: 📞 +91 91101 13671"
+    )
+    if update.message:
+        await update.message.reply_text(help_text)
+    elif update.callback_query:
+        try: await update.callback_query.answer()
+        except: pass
+        await update.callback_query.message.reply_text(help_text)
+
+# Button callback router
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    try:
+        await query.answer()
+    except Exception:
+        pass
+
+    data = query.data
+    chat = query.message.chat
+    user = query.from_user
+
+    # Security: In groups, only admins can click control buttons!
+    if chat.type in ["group", "supergroup"]:
+        if not await is_group_admin(chat, user.id):
+            await query.answer("⚠️ केवल ग्रुप एडमिन ही टेस्ट शुरू या बदल सकते हैं!", show_alert=True)
+            return
+
+    if data.startswith("menu_mock_"):
+        mock_type = data.replace("menu_mock_", "")
+        await show_mock_sets(query, mock_type)
+    elif data.startswith("subj_"):
+        subject_key = data.replace("subj_", "")
+        await show_subject_sets(query, subject_key)
+    elif data.startswith("setselect_mock"):
+        mock_type, set_key = parse_compound(data, "setselect_mock")
+        if mock_type and set_key:
+            await show_group_starter_card(query, "mock", mock_type, set_key)
+    elif data.startswith("setselect_subj"):
+        subject_key, set_key = parse_compound(data, "setselect_subj")
+        if subject_key and set_key:
+            await show_group_starter_card(query, "subj", subject_key, set_key)
+    elif data.startswith("startmock"):
+        mock_type, set_key = parse_compound(data, "startmock")
+        if mock_type and set_key:
+            await start_group_quiz(chat.id, user, "mock", mock_type, set_key, context)
+    elif data.startswith("startsubj"):
+        subject_key, set_key = parse_compound(data, "startsubj")
+        if subject_key and set_key:
+            await start_group_quiz(chat.id, user, "subject", subject_key, set_key, context)
+    elif data == "btn_back_subjects":
+        await start_command(update, context)
+    elif data == "btn_stats":
+        await stats_command(update, context)
+    elif data == "btn_leaderboard":
+        await leaderboard_command(update, context)
+    elif data == "btn_help":
+        await help_command(update, context)
+
+def main():
+    print("🤖 Starting NMMS Group-Dedicated Quiz Bot...")
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    # Handlers
+    app.add_handler(CommandHandler(["start", "startquiz"], start_command))
+    app.add_handler(CommandHandler(["quiz", "nmms"], quiz_command))
+    app.add_handler(CommandHandler("stop", stop_command))
+    app.add_handler(CommandHandler("stats", stats_command))
+    app.add_handler(CommandHandler("score", stats_command))
+    app.add_handler(CommandHandler("leaderboard", leaderboard_command))
+    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CallbackQueryHandler(button_callback))
+    app.add_handler(PollAnswerHandler(receive_quiz_answer))
+
+    print("✅ NMMS Quiz Bot is online and listening!")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()

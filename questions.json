@@ -1,0 +1,72 @@
+[
+  {
+    "id": 1,
+    "question": "भारत की राजधानी क्या है? (What is the capital of India?)",
+    "options": ["मुंबई (Mumbai)", "नई दिल्ली (New Delhi)", "कोलकाता (Kolkata)", "चेन्नई (Chennai)"],
+    "correct_option_id": 1,
+    "explanation": "भारत की राजधानी नई दिल्ली (New Delhi) है।"
+  },
+  {
+    "id": 2,
+    "question": "कंप्यूटर का मस्तिष्क (Brain of Computer) किसे कहा जाता है?",
+    "options": ["RAM", "Hard Disk", "CPU", "Motherboard"],
+    "correct_option_id": 2,
+    "explanation": "CPU (Central Processing Unit) को कंप्यूटर का दिमाग कहा जाता है।"
+  },
+  {
+    "id": 3,
+    "question": "दुनिया की सबसे लंबी नदी कौन सी है?",
+    "options": ["अमेज़न (Amazon)", "नील (Nile)", "गंगा (Ganga)", "यांग्त्ज़ी (Yangtze)"],
+    "correct_option_id": 1,
+    "explanation": "नील नदी (Nile River) दुनिया की सबसे लंबी नदी है (लगभग 6,650 किमी)।"
+  },
+  {
+    "id": 4,
+    "question": "क्रिकेट विश्व कप 2023 किस देश ने जीता था?",
+    "options": ["भारत (India)", "इंग्लैंड (England)", "ऑस्ट्रेलिया (Australia)", "न्यूज़ीलैंड (New Zealand)"],
+    "correct_option_id": 2,
+    "explanation": "ऑस्ट्रेलिया ने 2023 का ICC पुरुष क्रिकेट विश्व कप जीता था।"
+  },
+  {
+    "id": 5,
+    "question": "मानव शरीर में कुल कितनी हड्डियाँ (Bones) होती हैं?",
+    "options": ["206", "208", "300", "210"],
+    "correct_option_id": 0,
+    "explanation": "एक वयस्क मानव शरीर में कुल 206 हड्डियाँ होती हैं।"
+  },
+  {
+    "id": 6,
+    "question": "सौर मंडल (Solar System) का सबसे बड़ा ग्रह कौन सा है?",
+    "options": ["मंगल (Mars)", "बृहस्पति (Jupiter)", "शनि (Saturn)", "पृथ्वी (Earth)"],
+    "correct_option_id": 1,
+    "explanation": "बृहस्पति (Jupiter) सौर मंडल का सबसे बड़ा ग्रह है।"
+  },
+  {
+    "id": 7,
+    "question": "Python प्रोग्रामिंग भाषा को किसने विकसित किया था?",
+    "options": ["जेम्स गोस्लिंग", "डेनिस रिची", "गुइडो वैन रोसुम (Guido van Rossum)", "एलन ट्यूरिंग"],
+    "correct_option_id": 2,
+    "explanation": "Python को 1991 में Guido van Rossum ने बनाया था।"
+  },
+  {
+    "id": 8,
+    "question": "भारत का राष्ट्रीय खेल (National Game) किसे माना जाता है?",
+    "options": ["क्रिकेट", "हॉकी", "कबड्डी", "फुटबॉल"],
+    "correct_option_id": 1,
+    "explanation": "परंपरागत रूप से हॉकी को भारत का राष्ट्रीय खेल माना जाता है।"
+  },
+  {
+    "id": 9,
+    "question": "प्रकाश की गति (Speed of Light) लगभग कितनी होती है?",
+    "options": ["3,00,000 km/s", "1,50,000 km/s", "30,000 km/s", "5,00,000 km/s"],
+    "correct_option_id": 0,
+    "explanation": "प्रकाश की गति वैक्यूम में लगभग 3,00,000 किलोमीटर प्रति सेकंड होती है।"
+  },
+  {
+    "id": 10,
+    "question": "ताजमहल किस नदी के किनारे स्थित है?",
+    "options": ["गंगा", "यमुना", "सरयू", "नर्मदा"],
+    "correct_option_id": 1,
+    "explanation": "ताजमहल आगरा में यमुना नदी के तट पर स्थित है।"
+  }
+]

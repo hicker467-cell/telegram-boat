@@ -1,0 +1,200 @@
+import io
+import os
+from datetime import datetime
+from PIL import Image, ImageDraw, ImageFont
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LOGO_PATH = os.path.join(BASE_DIR, "logo.png")
+LOCAL_FONT_PATH = os.path.join(BASE_DIR, "nirmala.ttc")
+
+def get_font(size: int, is_bold: bool = False):
+    """Safely loads Hindi/English compatible TrueType fonts across Windows and Linux."""
+    candidates = [
+        LOCAL_FONT_PATH,
+        "C:/Windows/Fonts/Nirmala.ttc",
+        "C:/Windows/Fonts/arial.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if is_bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf" if is_bold else "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            try:
+                return ImageFont.truetype(p, size, index=0)
+            except Exception:
+                continue
+    return ImageFont.load_default()
+
+def clean_test_title(raw_name: str) -> str:
+    """Standardizes test name into a clean, professional English/Hindi title."""
+    s = raw_name.strip()
+    if "MAT" in s and "01" in s: return "MAT Full Mock Test - 01 (90 Questions)"
+    if "MAT" in s and "02" in s: return "MAT Full Mock Test - 02 (90 Questions)"
+    if "MAT" in s and "03" in s: return "MAT Full Mock Test - 03 (90 Questions)"
+    if "SAT" in s and "01" in s: return "SAT Full Mock Test - 01 (90 Questions)"
+    if "SAT" in s and "02" in s: return "SAT Full Mock Test - 02 (90 Questions)"
+    if "SAT" in s and "03" in s: return "SAT Full Mock Test - 03 (90 Questions)"
+    if "विज्ञान" in s and "सामाजिक" not in s:
+        num = "".join([c for c in s if c.isdigit()])[:2] or "01"
+        return f"Science Practice Test - Set {num} (50 Questions)"
+    if "सामाजिक" in s or "सा. विज्ञान" in s:
+        num = "".join([c for c in s if c.isdigit()])[:2] or "01"
+        return f"Social Science Practice Test - Set {num} (50 Questions)"
+    if "तर्कशक्ति" in s or "मानसिक" in s:
+        num = "".join([c for c in s if c.isdigit()])[:2] or "01"
+        return f"Mental Ability (MAT) - Set {num} (50 Questions)"
+    if "गणित" in s:
+        num = "".join([c for c in s if c.isdigit()])[:2] or "01"
+        return f"Mathematics Practice Test - Set {num} (50 Questions)"
+    return s
+
+def generate_result_card(test_name: str, total_q: int, top_students: list, attempted_q: int = None) -> io.BytesIO:
+    """
+    Generates a high-resolution, branded result card for Sagar Coaching Centre.
+    Supports Top 20 rankers with dynamic canvas height and book author promotion.
+    """
+    width = 1200
+    row_height = 50
+    display_students = top_students[:20] if top_students else []
+    num_rows = max(len(display_students), 3)
+
+    header_height = 185
+    meta_height = 65
+    table_header_h = 42
+    footer_height = 95
+    table_y = header_height + meta_height + 15
+    height = table_y + table_header_h + (num_rows * row_height) + footer_height
+
+    # Deep Slate/Navy Background
+    img = Image.new("RGB", (width, height), color=(15, 23, 42))
+    draw = ImageDraw.Draw(img)
+
+    # Fonts
+    title_font = get_font(38, is_bold=True)
+    subtitle_font = get_font(20, is_bold=True)
+    author_font = get_font(18, is_bold=False)
+    info_font = get_font(19, is_bold=True)
+    th_font = get_font(18, is_bold=True)
+    row_font = get_font(19, is_bold=False)
+    book_font = get_font(19, is_bold=True)
+    footer_contact_font = get_font(18, is_bold=False)
+
+    # Header Background
+    draw.rectangle([(0, 0), (width, header_height)], fill=(24, 32, 47))
+    # Gold Accent Line below header
+    draw.rectangle([(0, header_height - 5), (width, header_height)], fill=(234, 179, 8))
+
+    # Draw Circular Logo
+    logo_placed = False
+    if os.path.exists(LOGO_PATH):
+        try:
+            logo_img = Image.open(LOGO_PATH).convert("RGBA")
+            logo_size = 135
+            logo_img = logo_img.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
+            img.paste(logo_img, (55, 25), mask=logo_img.split()[3])
+            logo_placed = True
+        except Exception as e:
+            print("Logo error:", e)
+
+    # Header Typography
+    text_x = 215 if logo_placed else (width // 2)
+    align_mode = "lm" if logo_placed else "mm"
+
+    draw.text((text_x, 46), "SAGAR COACHING CENTRE", font=title_font, fill=(255, 255, 255), anchor=align_mode)
+    draw.text((text_x, 94), "NMMS SCHOLARSHIP EXAM • OFFICIAL MERIT LIST", font=subtitle_font, fill=(234, 179, 8), anchor=align_mode)
+    draw.text((text_x, 138), "📍 Bhagwanpur (Supaul, Bihar)   |   ✍️ Book Author & Mentor: Sagar Sir", font=author_font, fill=(148, 163, 184), anchor=align_mode)
+
+    # Meta Bar (Test Details)
+    meta_box_y = header_height + 15
+    draw.rounded_rectangle([(50, meta_box_y), (width - 50, meta_box_y + 44)], radius=8, fill=(30, 41, 59))
+    clean_title = clean_test_title(test_name)
+    date_str = datetime.now().strftime("%d-%m-%Y")
+    
+    if attempted_q and attempted_q < total_q:
+        q_label = f"Questions: {attempted_q}/{total_q}"
+    else:
+        q_label = f"Total Questions: {total_q}"
+
+    info_str = f"📝 {clean_title}   •   🎯 {q_label}   •   📅 {date_str}"
+    draw.text((width // 2, meta_box_y + 22), info_str, font=info_font, fill=(226, 232, 240), anchor="mm")
+
+    # Table Header Box
+    table_x = 50
+    table_w = width - (table_x * 2)
+    th_y = meta_box_y + 55
+    draw.rounded_rectangle([(table_x, th_y), (table_x + table_w, th_y + 38)], radius=6, fill=(30, 41, 59))
+
+    # Columns:
+    # Rank (70px) | Name (430px) | Score (180px) | Accuracy (160px) | Avg Speed (180px)
+    draw.text((table_x + 35, th_y + 19), "RANK", font=th_font, fill=(148, 163, 184), anchor="mm")
+    draw.text((table_x + 95, th_y + 19), "STUDENT NAME", font=th_font, fill=(148, 163, 184), anchor="lm")
+    draw.text((table_x + 580, th_y + 19), "SCORE", font=th_font, fill=(148, 163, 184), anchor="mm")
+    draw.text((table_x + 785, th_y + 19), "ACCURACY", font=th_font, fill=(148, 163, 184), anchor="mm")
+    draw.text((table_x + 980, th_y + 19), "AVG SPEED", font=th_font, fill=(148, 163, 184), anchor="mm")
+
+    # Table Rows
+    y = th_y + 45
+    effective_total = attempted_q if (attempted_q and attempted_q > 0) else total_q
+
+    for i, student in enumerate(display_students):
+        bg_color = (24, 32, 47) if i % 2 == 0 else (19, 26, 38)
+        border_fill = None
+        if i == 0: border_fill = (234, 179, 8)       # Gold
+        elif i == 1: border_fill = (203, 213, 225)   # Silver
+        elif i == 2: border_fill = (217, 119, 6)     # Bronze
+
+        row_h = 42
+        draw.rounded_rectangle([(table_x, y), (table_x + table_w, y + row_h)], radius=6, fill=bg_color)
+        if border_fill:
+            draw.rectangle([(table_x, y), (table_x + 6, y + row_h)], fill=border_fill)
+
+        # Rank
+        medals = ["🥇 #1", "🥈 #2", "🥉 #3"]
+        rank_text = medals[i] if i < len(medals) else f"#{i+1}"
+        rank_color = (234, 179, 8) if i < 3 else (203, 213, 225)
+        draw.text((table_x + 35, y + (row_h // 2)), rank_text, font=row_font, fill=rank_color, anchor="mm")
+
+        # Name
+        s_name = str(student.get("name", "Student")).strip()
+        if len(s_name) > 28:
+            s_name = s_name[:26] + ".."
+        draw.text((table_x + 95, y + (row_h // 2)), s_name, font=row_font, fill=(255, 255, 255), anchor="lm")
+
+        # Score
+        score_val = student.get("score", 0)
+        draw.text((table_x + 580, y + (row_h // 2)), f"{score_val} / {effective_total}", font=row_font, fill=(56, 189, 248), anchor="mm")
+
+        # Accuracy (%)
+        pct = (score_val / effective_total * 100) if effective_total > 0 else 0
+        draw.text((table_x + 785, y + (row_h // 2)), f"{pct:.1f}%", font=row_font, fill=(74, 222, 128), anchor="mm")
+
+        # Avg Speed
+        avg_time = student.get("avg_time", 0.0)
+        draw.text((table_x + 980, y + (row_h // 2)), f"{avg_time:.1f}s / Q", font=row_font, fill=(244, 114, 182), anchor="mm")
+
+        y += row_height
+
+    # Footer Branding & Book Order CTA
+    footer_box_y = height - 85
+    draw.line([(50, footer_box_y), (width - 50, footer_box_y)], fill=(51, 65, 85), width=1)
+    
+    # Book Promo Line
+    draw.text(
+        (width // 2, footer_box_y + 22),
+        "📖 ये सभी प्रश्न 'सागर सर' द्वारा लिखित NMMS स्पेशल गाइड बुक से लिए गए हैं",
+        font=book_font,
+        fill=(253, 224, 71),  # gold-300
+        anchor="mm"
+    )
+    # Order CTA Line
+    draw.text(
+        (width // 2, footer_box_y + 54),
+        "📦 संपूर्ण तैयारी हेतु पुस्तक ऑर्डर करें: 📞 +91 91101 13671   •   सागर कोचिंग सेन्टर, भगवानपुर",
+        font=footer_contact_font,
+        fill=(203, 213, 225),  # slate-300
+        anchor="mm"
+    )
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    buf.seek(0)
+    return buf
