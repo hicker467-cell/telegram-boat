@@ -3,9 +3,11 @@ import sys
 import time
 import subprocess
 import threading
+import urllib.request
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BOT_SCRIPT = os.path.join(BASE_DIR, "bot.py")
+PUBLIC_URL = "https://telegram-boat-1omi.onrender.com"
 
 _bot_started = False
 _lock = threading.Lock()
@@ -35,9 +37,29 @@ def start_bot_supervisor():
         print("🔄 Restarting bot.py in 5 seconds to ensure 24/7 uptime...")
         time.sleep(5)
 
+def keep_alive_pinger():
+    """Pings our public Render URL every 8 minutes to prevent Render free-tier from sleeping."""
+    time.sleep(90)  # Wait 90 seconds after boot
+    print(f"💓 Keep-alive pinger started for {PUBLIC_URL}")
+    while True:
+        try:
+            req = urllib.request.Request(
+                PUBLIC_URL,
+                headers={"User-Agent": "SagarBot-KeepAlive/1.0"}
+            )
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                print(f"💓 Keep-alive ping sent - status: {resp.status}")
+        except Exception as e:
+            print(f"⚠️ Keep-alive ping note: {e}")
+        time.sleep(8 * 60)  # Ping every 8 minutes (Render sleeps after 15 minutes)
+
 # Launch supervisor thread immediately
 supervisor_thread = threading.Thread(target=start_bot_supervisor, daemon=True)
 supervisor_thread.start()
+
+# Launch keep-alive pinger thread to prevent Render sleep mode
+pinger_thread = threading.Thread(target=keep_alive_pinger, daemon=True)
+pinger_thread.start()
 
 def application(environ, start_response):
     status = '200 OK'
