@@ -458,9 +458,12 @@ async def finish_group_quiz(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
         )
         medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
 
+        total_participants = len(sorted_players)
+        list_label = f"टॉप 20 (कुल {total_participants} छात्रों में से)" if total_participants > 10 else f"मेरिट लिस्ट ({total_participants} छात्र)"
+
         result_msg = (
             "🏛️ SAGAR COACHING CENTRE\n"
-            "🏆 NMMS महा-अभ्यास: मेरिट लिस्ट (Top Rankers)\n"
+            f"🏆 NMMS महा-अभ्यास: {list_label}\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             f"📝 टेस्ट: {session['test_name']} | कुल प्रश्न: {attempted}\n\n"
         )
@@ -473,8 +476,8 @@ async def finish_group_quiz(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
         
         result_msg += (
             "━━━━━━━━━━━━━━━━━━━━\n"
-            "📖 ये सभी प्रश्न 'सागर सर' द्वारा लिखित NMMS स्पेशल बुक से लिए गए हैं।\n"
-            "📦 संपूर्ण तैयारी हेतु पुस्तक ऑर्डर करें: 📞 +91 91101 13671\n"
+            "📖 सभी प्रश्न 'सागर सर' (7+ वर्ष अनुभव) द्वारा रचित NMMS पुस्तक से लिए गए हैं।\n"
+            "🏛️ सागर कोचिंग सेन्टर, भगवानपुर | 📞 +91 91101 13671\n"
             "👏 शानदार प्रदर्शन करने वाले सभी छात्रों को बधाई!"
         )
 
@@ -489,13 +492,14 @@ async def finish_group_quiz(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
                 test_name=session["test_name"],
                 total_q=total_questions,
                 top_students=sorted_players,
-                attempted_q=attempted
+                attempted_q=attempted,
+                total_participants=len(sorted_players)
             )
             caption = (
-                "🏆 NMMS Official Merit Card (Top Rankers)\n"
+                "🏆 NMMS Official Merit Card (Top 20)\n"
                 "🏛️ Sagar Coaching Centre, Bhagwanpur (Supaul)\n"
-                "📖 NMMS Special Guide Book by Sagar Sir\n"
-                "📦 पुस्तक ऑर्डर एवं जानकारी: 📞 +91 91101 13671\n"
+                "📖 NMMS Special Guide Book by Sagar Sir (7+ Years Exp.)\n"
+                "📞 +91 91101 13671\n"
                 "📲 WhatsApp Status पर अवश्य शेयर करें!"
             )
             await context.bot.send_photo(

@@ -47,15 +47,24 @@ def clean_test_title(raw_name: str) -> str:
         return f"Mathematics Practice Test - Set {num} (50 Questions)"
     return s
 
-def generate_result_card(test_name: str, total_q: int, top_students: list, attempted_q: int = None) -> io.BytesIO:
+def generate_result_card(
+    test_name: str,
+    total_q: int,
+    top_students: list,
+    attempted_q: int = None,
+    total_participants: int = None
+) -> io.BytesIO:
     """
     Generates a high-resolution, branded result card for Sagar Coaching Centre.
-    Supports Top 20 rankers with dynamic canvas height and book author promotion.
+    Displays Top 20 rankers out of total participating students.
     """
     width = 1200
     row_height = 50
     display_students = top_students[:20] if top_students else []
     num_rows = max(len(display_students), 3)
+
+    if not total_participants:
+        total_participants = len(top_students) if top_students else len(display_students)
 
     header_height = 185
     meta_height = 65
@@ -70,7 +79,7 @@ def generate_result_card(test_name: str, total_q: int, top_students: list, attem
 
     # Fonts
     title_font = get_font(38, is_bold=True)
-    subtitle_font = get_font(20, is_bold=True)
+    subtitle_font = get_font(21, is_bold=True)
     author_font = get_font(18, is_bold=False)
     info_font = get_font(19, is_bold=True)
     th_font = get_font(18, is_bold=True)
@@ -99,9 +108,15 @@ def generate_result_card(test_name: str, total_q: int, top_students: list, attem
     text_x = 215 if logo_placed else (width // 2)
     align_mode = "lm" if logo_placed else "mm"
 
+    # Subtitle with "Top 20 Out of X Students"
+    if total_participants and total_participants > len(display_students):
+        sub_text = f"NMMS SCHOLARSHIP EXAM • TOP 20 (OUT OF {total_participants} STUDENTS)"
+    else:
+        sub_text = f"NMMS SCHOLARSHIP EXAM • TOP RANKERS ({total_participants} STUDENTS)"
+
     draw.text((text_x, 46), "SAGAR COACHING CENTRE", font=title_font, fill=(255, 255, 255), anchor=align_mode)
-    draw.text((text_x, 94), "NMMS SCHOLARSHIP EXAM • OFFICIAL MERIT LIST", font=subtitle_font, fill=(234, 179, 8), anchor=align_mode)
-    draw.text((text_x, 138), "📍 Bhagwanpur (Supaul, Bihar)   |   ✍️ Book Author & Mentor: Sagar Sir", font=author_font, fill=(148, 163, 184), anchor=align_mode)
+    draw.text((text_x, 94), sub_text, font=subtitle_font, fill=(234, 179, 8), anchor=align_mode)
+    draw.text((text_x, 138), "📍 Bhagwanpur (Supaul, Bihar)   |   ✍️ Sagar Sir (7+ Years Experience)", font=author_font, fill=(148, 163, 184), anchor=align_mode)
 
     # Meta Bar (Test Details)
     meta_box_y = header_height + 15
@@ -173,22 +188,22 @@ def generate_result_card(test_name: str, total_q: int, top_students: list, attem
 
         y += row_height
 
-    # Footer Branding & Book Order CTA
+    # Footer Branding
     footer_box_y = height - 85
     draw.line([(50, footer_box_y), (width - 50, footer_box_y)], fill=(51, 65, 85), width=1)
     
-    # Book Promo Line
+    # Book Credit Line (Author: Sagar Sir, 7+ Years Experience)
     draw.text(
         (width // 2, footer_box_y + 22),
-        "📖 ये सभी प्रश्न 'सागर सर' द्वारा लिखित NMMS स्पेशल गाइड बुक से लिए गए हैं",
+        "📖 सभी प्रश्न 'सागर सर' (7+ वर्ष अनुभव) द्वारा रचित NMMS पुस्तक से लिए गए हैं",
         font=book_font,
         fill=(253, 224, 71),  # gold-300
         anchor="mm"
     )
-    # Order CTA Line
+    # Contact & Centre Line
     draw.text(
         (width // 2, footer_box_y + 54),
-        "📦 संपूर्ण तैयारी हेतु पुस्तक ऑर्डर करें: 📞 +91 91101 13671   •   सागर कोचिंग सेन्टर, भगवानपुर",
+        "🏛️ सागर कोचिंग सेन्टर, भगवानपुर (सुपौल, बिहार)   •   📞 संपर्क: +91 91101 13671",
         font=footer_contact_font,
         fill=(203, 213, 225),  # slate-300
         anchor="mm"
