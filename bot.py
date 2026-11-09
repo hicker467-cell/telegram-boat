@@ -246,11 +246,12 @@ async def show_group_starter_card(query, test_type: str, group_key: str, set_key
         return
 
     q_count = len(set_info.get("questions", []))
+    t_sec = group_data.get("timer_seconds", 60)
     text = (
         "🏛️ SAGAR COACHING CENTRE\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         f"📝 {set_info['name']}\n"
-        f"❓ कुल प्रश्न: {q_count} | ⏱️ समय: 60s / प्रश्न\n"
+        f"❓ कुल प्रश्न: {q_count} | ⏱️ समय: {t_sec}s / प्रश्न\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         "👉 नीचे बटन दबाकर कोचिंग ग्रुप चुनें और टेस्ट शुरू करें:"
     )
@@ -355,7 +356,7 @@ async def start_group_quiz(chat_id: int, user, session_type: str, group_key: str
             "🎓 NMMS छात्रवृत्ति महा-अभ्यास\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             f"📝 टेस्ट: {display_title}\n"
-            f"❓ कुल प्रश्न: {len(shuffled_questions)} | ⏱️ समय: 60s प्रति प्रश्न\n"
+            f"❓ कुल प्रश्न: {len(shuffled_questions)} | ⏱️ समय: {timer_seconds}s प्रति प्रश्न\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             "⚡ पहला प्रश्न आ रहा है, सभी छात्र तैयार रहें!"
         )
