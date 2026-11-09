@@ -14,7 +14,7 @@ from telegram.ext import (
     PollAnswerHandler,
     ContextTypes
 )
-from result_card import generate_result_card, generate_topper_card
+from result_card import generate_result_card, generate_topper_card, clean_test_title
 
 # Logging configuration
 logging.basicConfig(
@@ -347,13 +347,14 @@ async def start_group_quiz(chat_id: int, user, session_type: str, group_key: str
 
     context.bot_data.setdefault("group_sessions", {})[chat_id] = session
 
+    display_title = clean_test_title(set_info['name'])
     await context.bot.send_message(
         chat_id=chat_id,
         text=(
             "🏛️ SAGAR COACHING CENTRE\n"
             "🎓 NMMS छात्रवृत्ति महा-अभ्यास\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
-            f"📝 {set_info['name']}\n"
+            f"📝 टेस्ट: {display_title}\n"
             f"❓ कुल प्रश्न: {len(shuffled_questions)} | ⏱️ समय: 60s प्रति प्रश्न\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             "⚡ पहला प्रश्न आ रहा है, सभी छात्र तैयार रहें!"
@@ -479,7 +480,7 @@ async def finish_group_quiz(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
             "🏛️ SAGAR COACHING CENTRE\n"
             f"🏆 NMMS महा-अभ्यास: {list_label}\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
-            f"📝 टेस्ट: {session['test_name']} | कुल प्रश्न: {attempted}\n\n"
+            f"📝 टेस्ट: {clean_test_title(session['test_name'])} | कुल प्रश्न: {attempted} | कुल प्रतिभागी: {total_participants}\n\n"
         )
         for i, p in enumerate(sorted_players[:10]):
             m = medals[i] if i < len(medals) else f"#{i+1}"
