@@ -330,7 +330,7 @@ async def start_group_quiz(chat_id: int, user, session_type: str, group_key: str
     random.shuffle(questions)
     shuffled_questions = [shuffle_question_options(q) for q in questions]
 
-    timer_seconds = 60
+    timer_seconds = 5
 
     session = {
         "chat_id": chat_id,
@@ -379,7 +379,8 @@ async def send_next_group_question(chat_id: int, context: ContextTypes.DEFAULT_T
         return
 
     q = questions[idx]
-    timer = 60
+    # Fast test mode: Telegram API enforces open_period between 5 and 600 seconds
+    timer = 5
 
     q_title = f"Q{idx + 1}/{total}: {q['question']}"
     if len(q_title) > 300:
@@ -419,7 +420,7 @@ async def send_next_group_question(chat_id: int, context: ContextTypes.DEFAULT_T
 
 # Background timer for group
 async def group_question_timer(chat_id: int, poll_id: str, round_idx: int, wait_seconds: int, context: ContextTypes.DEFAULT_TYPE):
-    await asyncio.sleep(wait_seconds + 1.5)
+    await asyncio.sleep(wait_seconds + 0.5)
 
     session = context.bot_data.get("group_sessions", {}).get(chat_id)
     if not session:
