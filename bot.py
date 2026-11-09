@@ -778,7 +778,36 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "btn_help":
         await help_command(update, context)
 
+def start_dummy_health_server():
+    """Starts a lightweight HTTP health-check server on $PORT for Render Free Web Services."""
+    port_str = os.getenv("PORT")
+    if not port_str:
+        return
+    try:
+        import http.server
+        import socketserver
+        import threading
+
+        port = int(port_str)
+        class HealthHandler(http.server.SimpleHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.send_header("Content-type", "text/plain; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(b"Sagar Coaching Centre NMMS Bot is Running 24/7!\n")
+            def log_message(self, format, *args):
+                pass
+
+        socketserver.TCPServer.allow_reuse_address = True
+        httpd = socketserver.TCPServer(("0.0.0.0", port), HealthHandler)
+        t = threading.Thread(target=httpd.serve_forever, daemon=True)
+        t.start()
+        print(f"🌐 Cloud Health-Check Web Server started on port {port}")
+    except Exception as e:
+        print(f"Health server info: {e}")
+
 def main():
+    start_dummy_health_server()
     print("🤖 Starting NMMS Group-Dedicated Quiz Bot...")
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
