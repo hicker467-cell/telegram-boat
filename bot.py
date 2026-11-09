@@ -437,11 +437,16 @@ async def finish_group_quiz(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
         return
 
     current_idx = session.get("current_index", 0)
-    # If active poll was sent, that question counts as attempted
-    if session.get("active_poll_id"):
-        attempted = current_idx + 1
+    total_q = session.get("total", len(session.get("questions", [])))
+
+    # If quiz ran to completion naturally, attempted is exactly total_q
+    if current_idx >= total_q:
+        attempted = total_q
     else:
-        attempted = current_idx
+        # If stopped early mid-quiz, include active poll if one was in flight
+        attempted = current_idx + 1 if session.get("active_poll_id") else current_idx
+        attempted = min(attempted, total_q)
+    
     attempted = max(attempted, 1)
 
     scores = session.get("group_scores", {})
