@@ -313,11 +313,11 @@ def generate_topper_card(
     total_participants: int = None
 ) -> io.BytesIO:
     """
-    Generates a high-impact, realistic 3D medal Topper Card (900 x 960 px).
-    Features genuine 3D metallic medal badges (Gold, Silver, Bronze) with laurel wreaths
-    and flowing red ribbons, clean typography, student performance metrics, and zero wasted space.
+    Generates a high-impact, realistic 3D medal Topper Card (900 x 1020 px) with Option A layout.
+    Features official center logo, genuine 3D metallic medal badges (Gold, Silver, Bronze),
+    clean typography, student performance metrics, and zero wasted space.
     """
-    width, height = 900, 960
+    width, height = 900, 1020
     img = Image.new("RGB", (width, height), color=(11, 19, 43))
     draw = ImageDraw.Draw(img)
 
@@ -350,36 +350,49 @@ def generate_topper_card(
     draw.rounded_rectangle([(18, 18), (width - 18, height - 18)], radius=18, outline=(30, 45, 88), width=2)
     draw.rounded_rectangle([(26, 26), (width - 26, height - 26)], radius=14, outline=accent_color, width=2)
 
-    # Header
-    draw.text((width // 2, 60), "SAGAR COACHING CENTRE, BHAGWANPUR", font=get_latin_font(24, is_bold=True), fill=accent_light, anchor="mm")
-    draw.text((width // 2, 92), "NMMS SCHOLARSHIP EXAMINATION - 2024-25", font=get_latin_font(16, is_bold=True), fill=(148, 163, 184), anchor="mm")
-    draw.text((width // 2, 122), award_name, font=get_latin_font(20, is_bold=True), fill=accent_color, anchor="mm")
-    draw.line([(width // 2 - 220, 142), (width // 2 + 220, 142)], fill=accent_color, width=1)
+    # Center Logo with Metallic Border
+    logo_size = 72
+    if os.path.exists(LOGO_PATH):
+        try:
+            l_img = Image.open(LOGO_PATH).convert("RGBA").resize((logo_size, logo_size), Image.Resampling.LANCZOS)
+            lx = (width - logo_size) // 2
+            ly = 46
+            draw.ellipse([(lx - 4, ly - 4), (lx + logo_size + 4, ly + logo_size + 4)], outline=accent_color, width=2)
+            img.paste(l_img, (lx, ly), mask=l_img.split()[3])
+        except Exception:
+            pass
+
+    # Header text below logo
+    ty = 138
+    draw.text((width // 2, ty), "SAGAR COACHING CENTRE, BHAGWANPUR", font=get_latin_font(24, is_bold=True), fill=accent_light, anchor="mm")
+    draw.text((width // 2, ty + 28), "NMMS SCHOLARSHIP EXAMINATION - 2024-25", font=get_latin_font(15, is_bold=True), fill=(148, 163, 184), anchor="mm")
+    draw.text((width // 2, ty + 56), award_name, font=get_latin_font(19, is_bold=True), fill=accent_color, anchor="mm")
+    draw.line([(width // 2 - 200, ty + 74), (width // 2 + 200, ty + 74)], fill=accent_color, width=1)
 
     # 3D Realistic Medal Image
     if os.path.exists(medal_file):
         try:
             medal_im = Image.open(medal_file).convert("RGBA")
-            ratio = 190 / medal_im.height
+            ratio = 185 / medal_im.height
             new_w = int(medal_im.width * ratio)
-            medal_resized = medal_im.resize((new_w, 190), Image.Resampling.LANCZOS)
-            img.paste(medal_resized, (width // 2 - new_w // 2, 160), mask=medal_resized.split()[3])
+            medal_resized = medal_im.resize((new_w, 185), Image.Resampling.LANCZOS)
+            img.paste(medal_resized, (width // 2 - new_w // 2, ty + 95), mask=medal_resized.split()[3])
         except Exception:
             pass
 
     # Rank title pill
-    pill_y = 368
+    pill_y = ty + 300
     pw = 480
     draw.rounded_rectangle([(width // 2 - pw // 2, pill_y - 18), (width // 2 + pw // 2, pill_y + 18)], radius=18, fill=(19, 29, 61), outline=accent_color, width=2)
     draw.text((width // 2, pill_y), medal_title, font=get_latin_font(15, is_bold=True), fill=accent_light, anchor="mm")
 
     # Student Name
-    name_y = 422
+    name_y = pill_y + 54
     s_name = str(student.get("name", "Student")).strip()
     draw.text((width // 2, name_y), s_name, font=get_hindi_font(34, is_bold=True), fill=(255, 255, 255), anchor="mm")
 
     # Test Info (No set number)
-    test_y = name_y + 36
+    test_y = name_y + 35
     clean_title = clean_test_title(test_name)
     if total_participants:
         test_info_str = f"{clean_title}   •   Total Students: {total_participants}"
@@ -388,12 +401,6 @@ def generate_topper_card(
     draw.text((width // 2, test_y), test_info_str, font=get_latin_font(16, is_bold=True), fill=(148, 163, 184), anchor="mm")
 
     # Stat Boxes
-    stat_y = 495
-    box_w, box_h = 230, 85
-    spacing = 25
-    total_stat_w = (box_w * 3) + (spacing * 2)
-    start_x = (width - total_stat_w) // 2
-
     effective_total = attempted_q if (attempted_q and attempted_q > 0) else total_q
     score_val = student.get("score", 0)
     acc_val = student.get("accuracy", 0.0)
@@ -405,6 +412,12 @@ def generate_topper_card(
         ("AVG SPEED", f"{speed_val:.1f}s", (244, 114, 182)),
     ]
 
+    stat_y = name_y + 68
+    box_w, box_h = 230, 85
+    spacing = 25
+    total_stat_w = (box_w * 3) + (spacing * 2)
+    start_x = (width - total_stat_w) // 2
+
     for i, (label, val, val_col) in enumerate(stats_data):
         bx = start_x + (i * (box_w + spacing))
         draw.rounded_rectangle([(bx, stat_y), (bx + box_w, stat_y + box_h)], radius=10, fill=(22, 34, 70), outline=(37, 52, 98), width=1)
@@ -412,18 +425,18 @@ def generate_topper_card(
         draw.text((bx + box_w // 2, stat_y + 57), val, font=get_latin_font(26, is_bold=True), fill=val_col, anchor="mm")
 
     # Best Wishes Ribbon (Clean, warm, simple language)
-    wishes_y = stat_y + box_h + 26
+    wishes_y = stat_y + box_h + 24
     wishes_box_w = 720
-    wishes_box_h = 60
+    wishes_box_h = 58
     draw.rounded_rectangle([((width - wishes_box_w) // 2, wishes_y), ((width + wishes_box_w) // 2, wishes_y + wishes_box_h)], radius=10, fill=(19, 29, 61), outline=accent_color, width=1)
-    draw.text((width // 2, wishes_y + 19), "Best Wishes for Your Bright Future!", font=get_latin_font(17, is_bold=True), fill=(253, 224, 71), anchor="mm")
-    draw.text((width // 2, wishes_y + 42), "— Sagar Sir  •  Sagar Coaching Centre, Bhagwanpur", font=get_hindi_font(15, is_bold=False), fill=(203, 213, 225), anchor="mm")
+    draw.text((width // 2, wishes_y + 18), "Best Wishes for Your Bright Future!", font=get_latin_font(17, is_bold=True), fill=(253, 224, 71), anchor="mm")
+    draw.text((width // 2, wishes_y + 40), "— Sagar Sir  •  Sagar Coaching Centre, Bhagwanpur", font=get_hindi_font(15, is_bold=False), fill=(203, 213, 225), anchor="mm")
 
     # Footer (Follows immediately with zero wasted gap!)
-    footer_y = wishes_y + wishes_box_h + 26
+    footer_y = wishes_y + wishes_box_h + 24
     draw.line([(45, footer_y), (width - 45, footer_y)], fill=(37, 52, 98), width=1)
     draw.text((width // 2, footer_y + 22), "NMMS Special Book by Sagar Sir (7+ Years Exp.)", font=get_latin_font(16, is_bold=True), fill=(253, 224, 71), anchor="mm")
-    draw.text((width // 2, footer_y + 48), "Sagar Coaching Centre, Bhagwanpur (Supaul)   •   Call / WhatsApp: +91 91101 13671", font=get_hindi_font(15, is_bold=False), fill=(203, 213, 225), anchor="mm")
+    draw.text((width // 2, footer_y + 46), "Sagar Coaching Centre, Bhagwanpur (Supaul)   •   Call / WhatsApp: +91 91101 13671", font=get_hindi_font(15, is_bold=False), fill=(203, 213, 225), anchor="mm")
 
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
