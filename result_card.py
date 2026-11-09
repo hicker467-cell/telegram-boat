@@ -195,7 +195,7 @@ def generate_result_card(
     else:
         q_label = f"Total Questions: {total_q}"
 
-    info_str = f"📝 {clean_title}   •   🎯 {q_label}   •   📅 {date_str}"
+    info_str = f"📝 {clean_title}   •   👥 {total_participants} Students   •   🎯 {q_label}   •   📅 {date_str}"
     draw.text((width // 2, meta_box_y + 22), info_str, font=info_font, fill=(226, 232, 240), anchor="mm")
 
     # Table Header Box
@@ -304,7 +304,8 @@ def generate_topper_card(
     rank: int,
     test_name: str,
     total_q: int,
-    attempted_q: int = None
+    attempted_q: int = None,
+    total_participants: int = None
 ) -> io.BytesIO:
     """
     Generates a personalized Certificate / Topper Card for Rank 1, 2, or 3.
@@ -315,18 +316,23 @@ def generate_topper_card(
     draw = ImageDraw.Draw(img)
 
     # Rank specifics
+    if total_participants and total_participants > 1:
+        out_of_str = f" (OUT OF {total_participants} STUDENTS)"
+    else:
+        out_of_str = ""
+
     if rank == 1:
-        medal_title = "🥇 1st RANK • GOLD TOPPER"
+        medal_title = f"🥇 1st RANK{out_of_str}"
         accent_color = (234, 179, 8)     # Gold
         accent_light = (253, 224, 71)
         award_name = "CERTIFICATE OF EXCELLENCE"
     elif rank == 2:
-        medal_title = "🥈 2nd RANK • SILVER TOPPER"
+        medal_title = f"🥈 2nd RANK{out_of_str}"
         accent_color = (203, 213, 225)   # Silver
         accent_light = (241, 245, 249)
         award_name = "CERTIFICATE OF MERIT"
     else:
-        medal_title = "🥉 3rd RANK • BRONZE TOPPER"
+        medal_title = f"🥉 3rd RANK{out_of_str}"
         accent_color = (217, 119, 6)     # Bronze
         accent_light = (251, 191, 36)
         award_name = "CERTIFICATE OF MERIT"
@@ -384,20 +390,24 @@ def generate_topper_card(
 
     # Rank Badge pill under photo
     badge_y = av_y + avatar_size + 24
-    badge_w = 400
+    badge_w = 480
     badge_h = 44
     draw.rounded_rectangle([((width - badge_w) // 2, badge_y), ((width + badge_w) // 2, badge_y + badge_h)], radius=22, fill=(24, 32, 47), outline=accent_color, width=2)
-    draw.text((width // 2, badge_y + 22), medal_title, font=get_latin_font(20, is_bold=True), fill=accent_light, anchor="mm")
+    draw.text((width // 2, badge_y + 22), medal_title, font=get_latin_font(19, is_bold=True), fill=accent_light, anchor="mm")
 
     # Student Name
     name_y = badge_y + 60
     s_name = str(student.get("name", "Student")).strip()
     draw.text((width // 2, name_y), s_name, font=name_font, fill=(255, 255, 255), anchor="mm")
 
-    # Test Name
+    # Test Name & Total Participants
     test_y = name_y + 40
     clean_title = clean_test_title(test_name)
-    draw.text((width // 2, test_y), clean_title, font=test_font, fill=(148, 163, 184), anchor="mm")
+    if total_participants:
+        test_info_str = f"{clean_title}   •   Total Participants: {total_participants}"
+    else:
+        test_info_str = clean_title
+    draw.text((width // 2, test_y), test_info_str, font=test_font, fill=(148, 163, 184), anchor="mm")
 
     # Metrics Strip (3 Modern Boxes: Score, Accuracy, Speed)
     stat_y = test_y + 45

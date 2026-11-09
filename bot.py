@@ -565,7 +565,8 @@ async def finish_group_quiz(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
                         rank=r_num,
                         test_name=session["test_name"],
                         total_q=total_questions,
-                        attempted_q=attempted
+                        attempted_q=attempted,
+                        total_participants=len(sorted_players)
                     )
                     medals_label = ["🥇 1st Rank Topper", "🥈 2nd Rank Topper", "🥉 3rd Rank Topper"][rank_idx]
                     topper_name = str(topper.get("name", "Student")).replace('*', '').replace('_', '').strip()
