@@ -364,8 +364,10 @@ def generate_topper_card(
 
     # Header text below logo
     ty = 138
+    curr_year = datetime.now().year
+    curr_session = f"{curr_year}-{str(curr_year + 1)[-2:]}"
     draw.text((width // 2, ty), "SAGAR COACHING CENTRE, BHAGWANPUR", font=get_latin_font(24, is_bold=True), fill=accent_light, anchor="mm")
-    draw.text((width // 2, ty + 28), "NMMS SCHOLARSHIP EXAMINATION - 2024-25", font=get_latin_font(15, is_bold=True), fill=(148, 163, 184), anchor="mm")
+    draw.text((width // 2, ty + 28), f"NMMS SCHOLARSHIP EXAMINATION - {curr_session}", font=get_latin_font(15, is_bold=True), fill=(148, 163, 184), anchor="mm")
     draw.text((width // 2, ty + 56), award_name, font=get_latin_font(19, is_bold=True), fill=accent_color, anchor="mm")
     draw.line([(width // 2 - 200, ty + 74), (width // 2 + 200, ty + 74)], fill=accent_color, width=1)
 
@@ -391,14 +393,15 @@ def generate_topper_card(
     s_name = str(student.get("name", "Student")).strip()
     draw.text((width // 2, name_y), s_name, font=get_hindi_font(34, is_bold=True), fill=(255, 255, 255), anchor="mm")
 
-    # Test Info (No set number)
+    # Test Info (No set number, dynamic date)
     test_y = name_y + 35
     clean_title = clean_test_title(test_name)
+    date_str = datetime.now().strftime("%d %b %Y")
     if total_participants:
-        test_info_str = f"{clean_title}   •   Total Students: {total_participants}"
+        test_info_str = f"{clean_title}   •   {date_str}   •   Total Students: {total_participants}"
     else:
-        test_info_str = clean_title
-    draw.text((width // 2, test_y), test_info_str, font=get_latin_font(16, is_bold=True), fill=(148, 163, 184), anchor="mm")
+        test_info_str = f"{clean_title}   •   {date_str}"
+    draw.text((width // 2, test_y), test_info_str, font=get_latin_font(15, is_bold=True), fill=(148, 163, 184), anchor="mm")
 
     # Stat Boxes
     effective_total = attempted_q if (attempted_q and attempted_q > 0) else total_q
