@@ -810,21 +810,31 @@ def start_dummy_health_server():
 def main():
     start_dummy_health_server()
     print("🤖 Starting NMMS Group-Dedicated Quiz Bot...")
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    
+    while True:
+        try:
+            app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Handlers
-    app.add_handler(CommandHandler(["start", "startquiz"], start_command))
-    app.add_handler(CommandHandler(["quiz", "nmms"], quiz_command))
-    app.add_handler(CommandHandler("stop", stop_command))
-    app.add_handler(CommandHandler("stats", stats_command))
-    app.add_handler(CommandHandler("score", stats_command))
-    app.add_handler(CommandHandler("leaderboard", leaderboard_command))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CallbackQueryHandler(button_callback))
-    app.add_handler(PollAnswerHandler(receive_quiz_answer))
+            # Handlers
+            app.add_handler(CommandHandler(["start", "startquiz"], start_command))
+            app.add_handler(CommandHandler(["quiz", "nmms"], quiz_command))
+            app.add_handler(CommandHandler("stop", stop_command))
+            app.add_handler(CommandHandler("stats", stats_command))
+            app.add_handler(CommandHandler("score", stats_command))
+            app.add_handler(CommandHandler("leaderboard", leaderboard_command))
+            app.add_handler(CommandHandler("help", help_command))
+            app.add_handler(CallbackQueryHandler(button_callback))
+            app.add_handler(PollAnswerHandler(receive_quiz_answer))
 
-    print("✅ NMMS Quiz Bot is online and listening!")
-    app.run_polling(bootstrap_retries=-1)
+            print("✅ NMMS Quiz Bot is online and listening!")
+            app.run_polling(bootstrap_retries=-1)
+        except KeyboardInterrupt:
+            print("🛑 Stopping bot by user request...")
+            break
+        except Exception as e:
+            print(f"⚠️ Bot polling encountered exception: {e}. Auto-restarting polling in 5s...")
+            import time
+            time.sleep(5)
 
 if __name__ == "__main__":
     main()
