@@ -311,7 +311,7 @@ def generate_topper_card(
     Generates a personalized Certificate / Topper Card for Rank 1, 2, or 3.
     Features large circular avatar, metallic laurels, statistics, and official branding.
     """
-    width, height = 900, 1150
+    width, height = 900, 1200
     img = Image.new("RGB", (width, height), color=(15, 23, 42))  # slate-900
     draw = ImageDraw.Draw(img)
 
@@ -434,18 +434,39 @@ def generate_topper_card(
         draw.text((bx + box_w // 2, stat_y + 26), label, font=stat_lbl_font, fill=(148, 163, 184), anchor="mm")
         draw.text((bx + box_w // 2, stat_y + 64), val, font=stat_val_font, fill=val_col, anchor="mm")
 
+    # Best Wishes / Blessings Ribbon Box
+    wishes_y = stat_y + box_h + 26
+    wishes_box_w = 720
+    wishes_box_h = 65
+    draw.rounded_rectangle([((width - wishes_box_w) // 2, wishes_y), ((width + wishes_box_w) // 2, wishes_y + wishes_box_h)], radius=12, fill=(24, 32, 47), outline=accent_color, width=1)
+    
+    draw.text(
+        (width // 2, wishes_y + 22),
+        "🌟 आपके उज्ज्वल भविष्य एवं NMMS में चयन की हार्दिक शुभकामनाएं! 💐",
+        font=get_hindi_font(18, is_bold=True),
+        fill=(253, 224, 71),  # Gold
+        anchor="mm"
+    )
+    draw.text(
+        (width // 2, wishes_y + 46),
+        "— सागर सर एवं समस्त सागर कोचिंग परिवार, भगवानपुर",
+        font=get_hindi_font(15, is_bold=False),
+        fill=(203, 213, 225),  # Silver/Slate
+        anchor="mm"
+    )
+
     # Footer Branding
-    footer_y = height - 120
+    footer_y = height - 110
     draw.line([(60, footer_y), (width - 60, footer_y)], fill=(51, 65, 85), width=1)
     draw.text(
-        (width // 2, footer_y + 28),
+        (width // 2, footer_y + 25),
         "📖 प्रश्न स्रोत: 'सागर सर' (7+ वर्ष अनुभव) द्वारा रचित NMMS पुस्तक",
-        font=get_hindi_font(19, is_bold=True),
+        font=get_hindi_font(18, is_bold=True),
         fill=(253, 224, 71),
         anchor="mm"
     )
     draw.text(
-        (width // 2, footer_y + 62),
+        (width // 2, footer_y + 58),
         "🏛️ सागर कोचिंग सेन्टर, भगवानपुर (सुपौल, बिहार)   •   📞 संपर्क: +91 91101 13671",
         font=footer_font,
         fill=(203, 213, 225),
