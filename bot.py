@@ -235,12 +235,13 @@ async def show_mock_sets(query, mock_type: str):
 async def show_group_starter_card(query, test_type: str, group_key: str, set_key: str):
     db = load_database()
     if test_type == "mock":
-        set_info = db.get("full_mocks", {}).get(group_key, {}).get("sets", {}).get(set_key)
+        group_data = db.get("full_mocks", {}).get(group_key, {})
         deep_param = f"mock__{group_key}__{set_key}"
     else:
-        set_info = db.get("subjects", {}).get(group_key, {}).get("sets", {}).get(set_key)
+        group_data = db.get("subjects", {}).get(group_key, {})
         deep_param = f"subj__{group_key}__{set_key}"
 
+    set_info = group_data.get("sets", {}).get(set_key)
     if not set_info:
         await query.message.reply_text("⚠️ सेट नहीं मिला!")
         return
