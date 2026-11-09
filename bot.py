@@ -277,6 +277,7 @@ async def show_subject_sets(query, subject_key: str):
 
     subj_name = subj_data["name"]
     sets = subj_data.get("sets", {})
+    t_sec = subj_data.get("timer_seconds", 60)
     chat = query.message.chat
     is_group = chat.type in ["group", "supergroup"]
 
@@ -284,7 +285,7 @@ async def show_subject_sets(query, subject_key: str):
         "🏛️ SAGAR COACHING CENTRE\n"
         f"📝 {subj_name}\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "⏱️ समय: 60s / प्रश्न (50 प्रश्न प्रति सेट)\n\n"
+        f"⏱️ समय: {t_sec}s / प्रश्न (50 प्रश्न प्रति सेट)\n\n"
         "👇 जो सेट शुरू करना है, उसे चुनें:"
     )
 

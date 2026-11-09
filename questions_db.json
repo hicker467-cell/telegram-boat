@@ -2,7 +2,7 @@
   "subjects": {
     "Science": {
       "name": "विज्ञान (Science)",
-      "timer_seconds": 60,
+      "timer_seconds": 45,
       "sets": {
         "set_1": {
           "name": "विज्ञान सेट 1 (50 प्रश्न)",
@@ -3033,7 +3033,7 @@
     },
     "Social_Science": {
       "name": "सामाजिक विज्ञान (Social Science)",
-      "timer_seconds": 60,
+      "timer_seconds": 45,
       "sets": {
         "set_1": {
           "name": "सामाजिक विज्ञान सेट 1 (50 प्रश्न)",
@@ -9095,7 +9095,7 @@
     },
     "Mathematics": {
       "name": "गणित (Mathematics)",
-      "timer_seconds": 90,
+      "timer_seconds": 60,
       "sets": {
         "set_1": {
           "name": "गणित सेट 1 (50 प्रश्न)",
