@@ -14,7 +14,7 @@ from telegram.ext import (
     PollAnswerHandler,
     ContextTypes
 )
-from result_card import generate_result_card, generate_topper_card, clean_test_title
+from result_card import generate_result_card, generate_topper_card, clean_test_title, resolve_student_name
 
 # Logging configuration
 logging.basicConfig(
@@ -512,6 +512,21 @@ async def finish_group_quiz(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
         try:
             total_questions = session.get("total", attempted)
 
+            # Suspense & calculation announcement
+            try:
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=(
+                        "🏁 *टेस्ट समाप्त हुआ!*\n"
+                        "⏳ सभी छात्रों के अंकों की गणना और ऑफिशियल मेरिट लिस्ट तैयार की जा रही है... (कृपया 4-5 सेकंड प्रतीक्षा करें)"
+                    ),
+                    parse_mode="Markdown"
+                )
+            except Exception as e_announce:
+                logger.warning(f"Could not send suspense announcement: {e_announce}")
+
+            await asyncio.sleep(4.0)
+
             # Ensure user_id is populated for each player
             for uid_k, p in scores.items():
                 if not p.get("user_id"):
@@ -551,24 +566,26 @@ async def finish_group_quiz(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
                 total_participants=len(sorted_players)
             )
             caption = (
-                "🏆 NMMS Official Merit Card (Top 20)\n"
+                "🏆 *NMMS Official Merit Card (Top 20)*\n"
                 "🏛️ Sagar Coaching Centre, Bhagwanpur (Supaul)\n"
                 "📖 NMMS Special Guide Book by Sagar Sir (7+ Years Exp.)\n"
-                "📞 +91 91101 13671\n"
-                "📲 WhatsApp Status पर अवश्य शेयर करें!"
+                "📞 +91 91101 13671\n\n"
+                "✨ आप चाहें तो इस परिणाम को अपने WhatsApp Status पर शेयर कर सकते हैं! 👏"
             )
             await context.bot.send_photo(
                 chat_id=chat_id,
                 photo=image_buf,
-                caption=caption
+                caption=caption,
+                parse_mode="Markdown"
             )
 
-            # Send Personal Topper Certificate Cards for Top 3
+            # Send Personal Topper Certificate Cards for Top 3 with 1.5s cadence
             topper_limit = min(3, len(sorted_players))
             for rank_idx in range(topper_limit):
                 topper = sorted_players[rank_idx]
                 r_num = rank_idx + 1
                 try:
+                    await asyncio.sleep(1.5)
                     topper_buf = generate_topper_card(
                         student=topper,
                         rank=r_num,
@@ -577,18 +594,19 @@ async def finish_group_quiz(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
                         attempted_q=attempted,
                         total_participants=len(sorted_players)
                     )
-                    medals_label = ["🥇 1st Rank Topper", "🥈 2nd Rank Topper", "🥉 3rd Rank Topper"][rank_idx]
-                    topper_name = str(topper.get("name", "Student")).replace('*', '').replace('_', '').strip()
+                    medals_label = ["1st Rank Topper", "2nd Rank Topper", "3rd Rank Topper"][rank_idx]
+                    topper_name = resolve_student_name(topper)
                     topper_caption = (
-                        f"🌟 {medals_label}: {topper_name}\n"
-                        f"🎯 Score: {topper['score']}/{attempted} | Accuracy: {topper.get('accuracy', 0)}%\n"
-                        "🏛️ Sagar Coaching Centre, Bhagwanpur\n"
-                        "📲 Topper Certificate: WhatsApp Status पर ज़रूर शेयर करें!"
+                        f"🌟 *{medals_label}:* {topper_name}\n"
+                        f"🎯 Score: {topper['score']}/{attempted} | Accuracy: {topper.get('accuracy', 0):.1f}%\n"
+                        "🏛️ Sagar Coaching Centre, Bhagwanpur\n\n"
+                        "✨ आप चाहें तो इस Topper Certificate को अपने WhatsApp Status पर शेयर कर सकते हैं! 👏"
                     )
                     await context.bot.send_photo(
                         chat_id=chat_id,
                         photo=topper_buf,
-                        caption=topper_caption
+                        caption=topper_caption,
+                        parse_mode="Markdown"
                     )
                 except Exception as ex_topper:
                     logger.error(f"Error sending topper card for rank {r_num}: {ex_topper}")
