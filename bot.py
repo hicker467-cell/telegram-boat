@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import random
 import asyncio
@@ -47,11 +48,30 @@ def parse_compound(text: str, prefix: str):
             return parts[0], parts[1]
     return None, None
 
+_DB_CACHE = None
+
 def load_database():
+    global _DB_CACHE
+    if _DB_CACHE is not None:
+        return _DB_CACHE
     if DATABASE_FILE.exists():
         with open(DATABASE_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {"full_mocks": {}, "subjects": {}}
+            _DB_CACHE = json.load(f)
+            return _DB_CACHE
+    return {"daily_mix": {}, "full_mocks": {}, "subjects": {}}
+
+def get_category_group(db, category: str, group_key: str):
+    if category == "mix":
+        return db.get("daily_mix", {}).get(group_key, {})
+    if category == "mock":
+        return db.get("full_mocks", {}).get(group_key, {})
+    return db.get("subjects", {}).get(group_key, {})
+
+def natural_set_items(sets_dict: dict):
+    def _key(kv):
+        m = re.search(r"(\d+)", kv[0])
+        return (int(m.group(1)) if m else 9999, kv[0])
+    return sorted(sets_dict.items(), key=_key)
 
 def load_scores():
     if SCORES_FILE.exists():
@@ -93,18 +113,32 @@ def update_user_score(user, is_correct):
     save_scores(scores)
 
 def shuffle_question_options(q):
-    original_options = q["options"]
+    original_options = list(q["options"])
+    if q.get("shuffle_options", True) is False:
+        return {
+            "id": q.get("id", ""),
+            "question": q["question"],
+            "options": original_options,
+            "correct_option_id": q["correct_option_id"],
+            "explanation": q.get("explanation", ""),
+            "subject": q.get("subject", ""),
+            "image": q.get("image"),
+            "shuffle_options": False,
+        }
     correct_text = original_options[q["correct_option_id"]]
     indexed = list(enumerate(original_options))
     random.shuffle(indexed)
     new_options = [opt for _, opt in indexed]
     new_correct_id = new_options.index(correct_text)
     return {
+        "id": q.get("id", ""),
         "question": q["question"],
         "options": new_options,
         "correct_option_id": new_correct_id,
         "explanation": q.get("explanation", ""),
-        "subject": q.get("subject", "")
+        "subject": q.get("subject", ""),
+        "image": q.get("image"),
+        "shuffle_options": True,
     }
 
 async def is_group_admin(chat, user_id: int) -> bool:
@@ -133,7 +167,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # When launched via "Start in Group" button by an admin:
     if is_group and context.args and len(context.args) > 0:
         arg = context.args[0]
-        if arg.startswith("mock"):
+        if arg.startswith("q__"):
+            parts = arg.split("__")
+            if len(parts) >= 4:
+                cat, grp_key, s_key = parts[1], parts[2], "__".join(parts[3:])
+                await start_group_quiz(chat.id, user, cat, grp_key, s_key, context)
+                return
+        elif arg.startswith("mock"):
             mock_type, set_key = parse_compound(arg, "mock")
             if mock_type and set_key:
                 await start_group_quiz(chat.id, user, "mock", mock_type, set_key, context)
@@ -141,183 +181,167 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif arg.startswith("subj"):
             subject_key, set_key = parse_compound(arg, "subj")
             if subject_key and set_key:
-                await start_group_quiz(chat.id, user, "subject", subject_key, set_key, context)
+                await start_group_quiz(chat.id, user, "subj", subject_key, set_key, context)
                 return
+
+    db = load_database()
+    mix_cnt = len(db.get("daily_mix", {}).get("Daily_Mix", {}).get("sets", {}))
+    mat_m_cnt = len(db.get("full_mocks", {}).get("MAT", {}).get("sets", {}))
+    sat_m_cnt = len(db.get("full_mocks", {}).get("SAT", {}).get("sets", {}))
+    sci_cnt = len(db.get("subjects", {}).get("Science", {}).get("sets", {}))
+    sst_cnt = len(db.get("subjects", {}).get("Social_Science", {}).get("sets", {}))
+    mat_s_cnt = len(db.get("subjects", {}).get("Mental_Ability", {}).get("sets", {}))
+    mth_cnt = len(db.get("subjects", {}).get("Mathematics", {}).get("sets", {}))
 
     if is_group:
         welcome_text = (
             "🏛️ SAGAR COACHING CENTRE\n"
-            "🎓 NMMS लाइव टेस्ट पोर्टल\n"
+            "🎓 NMMS लाइव टेस्ट पोर्टल (UP + बिहार PYQ बैंक)\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             "✍️ पुस्तक लेखक: सागर सर (NMMS एक्सपर्ट)\n"
-            "⏱️ प्रत्येक प्रश्न: 60 सेकंड\n"
+            "⏱️ प्रत्येक प्रश्न: 60 सेकंड | 🖼️ चित्र-आधारित प्रश्न शामिल\n"
             "🏆 टेस्ट समाप्ति पर टॉप 20 छात्रों की मेरिट लिस्ट जारी होगी।\n\n"
-            "👇 नीचे से टेस्ट सेट चुनें:"
+            "👇 नीचे से टेस्ट श्रेणी चुनें:"
         )
     else:
         welcome_text = (
             "🏛️ SAGAR COACHING CENTRE\n"
-            "🎓 NMMS टेस्ट कंट्रोल पैनल\n"
+            "🎓 NMMS टेस्ट कंट्रोल पैनल (2,741 PYQ प्रश्न)\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             "✍️ पुस्तक लेखक: सागर सर (NMMS एक्सपर्ट)\n"
             "📞 संपर्क / WhatsApp: +91 91101 13671\n\n"
             "यहाँ से सेट चुनें और सीधे कोचिंग ग्रुप में शुरू करें:\n"
-            "• 🧠 MAT: 90 प्रश्न (60s / प्रश्न)\n"
-            "• 📚 SAT: 90 प्रश्न (35 वि. + 35 सा.वि. + 20 गणित) (60s / प्रश्न)\n"
-            "• 🔬 विषयवार अभ्यास: 50 प्रश्न प्रति सेट (60s / प्रश्न)\n\n"
-            "👇 नीचे से टेस्ट चुनें:"
+            f"• 🎯 डेली मिक्स (30 प्रश्न): {mix_cnt} सेट (10 MAT+8 वि.+7 सा.वि.+5 गणित)\n"
+            f"• 🧠 MAT फुल मॉक (90 प्रश्न): {mat_m_cnt} सेट\n"
+            f"• 📚 SAT फुल मॉक (90 प्रश्न): {sat_m_cnt} सेट (35 वि.+35 सा.वि.+20 गणित)\n"
+            "• 🔬 विषयवार अभ्यास (50 प्रश्न प्रति सेट) • ⏱️ 60s / प्रश्न\n\n"
+            "👇 नीचे से टेस्ट श्रेणी चुनें:"
         )
 
     keyboard = [
-        # Full 90Q Mocks
-        [InlineKeyboardButton("🧠 MAT फुल मॉक टेस्ट (90 प्रश्न | 60s)", callback_data="menu_mock_MAT")],
-        [InlineKeyboardButton("📚 SAT फुल मॉक टेस्ट (90 प्रश्न | 60s)", callback_data="menu_mock_SAT")],
-        # Subject wise practice
+        [InlineKeyboardButton(f"🎯 डेली मिक्स टेस्ट (30 Q • {mix_cnt} सेट | 60s)", callback_data="pg__mix__Daily_Mix__0")],
         [
-            InlineKeyboardButton("🔬 विज्ञान (50 Q)", callback_data="subj_Science"),
-            InlineKeyboardButton("🌍 सा. विज्ञान (50 Q)", callback_data="subj_Social_Science")
+            InlineKeyboardButton(f"🧠 MAT मॉक (90 Q • {mat_m_cnt} सेट)", callback_data="pg__mock__MAT__0"),
+            InlineKeyboardButton(f"📚 SAT मॉक (90 Q • {sat_m_cnt} सेट)", callback_data="pg__mock__SAT__0"),
         ],
         [
-            InlineKeyboardButton("🧠 तर्कशक्ति / MAT (50 Q)", callback_data="subj_Mental_Ability"),
-            InlineKeyboardButton("📐 गणित (50 Q)", callback_data="subj_Mathematics")
-        ]
+            InlineKeyboardButton(f"🔬 विज्ञान (50 Q • {sci_cnt} सेट)", callback_data="pg__subj__Science__0"),
+            InlineKeyboardButton(f"🌍 सा. विज्ञान (50 Q • {sst_cnt} सेट)", callback_data="pg__subj__Social_Science__0"),
+        ],
+        [
+            InlineKeyboardButton(f"🧠 तर्कशक्ति (50 Q • {mat_s_cnt} सेट)", callback_data="pg__subj__Mental_Ability__0"),
+            InlineKeyboardButton(f"📐 गणित (50 Q • {mth_cnt} सेट)", callback_data="pg__subj__Mathematics__0"),
+        ],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     if update.message:
-        await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode="Markdown")
+        await update.message.reply_text(welcome_text, reply_markup=reply_markup)
     elif update.callback_query:
-        await update.callback_query.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode="Markdown")
+        try:
+            await update.callback_query.edit_message_text(welcome_text, reply_markup=reply_markup)
+        except Exception:
+            await update.callback_query.message.reply_text(welcome_text, reply_markup=reply_markup)
 
-# Show Mock Sets
-async def show_mock_sets(query, mock_type: str):
+PAGE_SIZE = 10
+
+async def show_paginated_sets(query, category: str, group_key: str, page: int = 0, edit_in_place: bool = False):
+    """Displays 10 sets per page in a clean 2-column grid for Daily Mix, 90Q Mocks, and 50Q Subjects."""
     db = load_database()
-    mocks = db.get("full_mocks", {})
-    mock_data = mocks.get(mock_type)
-    if not mock_data:
-        await query.message.reply_text("⚠️ मॉक टेस्ट नहीं मिला!")
+    group_data = get_category_group(db, category, group_key)
+    if not group_data:
+        await query.message.reply_text("⚠️ टेस्ट श्रेणी नहीं मिली!")
         return
 
-    name = mock_data["name"]
-    sets = mock_data.get("sets", {})
+    name = group_data.get("name", group_key)
+    t_sec = group_data.get("timer_seconds", 60)
+    ordered_sets = natural_set_items(group_data.get("sets", {}))
+    total_sets = len(ordered_sets)
+    total_pages = max(1, (total_sets + PAGE_SIZE - 1) // PAGE_SIZE)
+    page = max(0, min(page, total_pages - 1))
+
+    start_i = page * PAGE_SIZE
+    page_items = ordered_sets[start_i:start_i + PAGE_SIZE]
     chat = query.message.chat
     is_group = chat.type in ["group", "supergroup"]
-
-    pattern_info = "90 प्रश्न (तर्कशक्ति)" if mock_type == "MAT" else "90 प्रश्न (35 वि. + 35 सा.वि. + 20 गणित)"
 
     text = (
         "🏛️ SAGAR COACHING CENTRE\n"
         f"📝 {name}\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        f"⏱️ समय: 60s / प्रश्न | 📋 पैटर्न: {pattern_info}\n\n"
+        f"⏱️ समय: {t_sec}s / प्रश्न | 📚 कुल सेट: {total_sets} (पेज {page + 1}/{total_pages})\n\n"
         "👇 जो सेट शुरू करना है, उसे चुनें:"
     )
 
     keyboard = []
-    for set_key, set_info in sets.items():
-        if is_group:
-            # If directly in group, start right away
-            keyboard.append([
-                InlineKeyboardButton(f"▶️ {set_info['name']} शुरू करें", callback_data=f"startmock__{mock_type}__{set_key}")
-            ])
-        else:
-            # In DM: show set button which leads to "Start in Group"
-            keyboard.append([
-                InlineKeyboardButton(f"📝 {set_info['name']}", callback_data=f"setselect_mock__{mock_type}__{set_key}")
-            ])
+    set_buttons = []
+    for set_key, set_info in page_items:
+        short_label = re.sub(r"\s*\(\d+\s*प्रश्न\)\s*$", "", set_info["name"]).strip()
+        prefix = "go" if is_group else "sel"
+        cb = f"{prefix}__{category}__{group_key}__{set_key}"
+        set_buttons.append(InlineKeyboardButton(f"📝 {short_label}", callback_data=cb))
+
+    for i in range(0, len(set_buttons), 2):
+        keyboard.append(set_buttons[i:i + 2])
+
+    if total_pages > 1:
+        nav_row = []
+        if page > 0:
+            nav_row.append(InlineKeyboardButton("⬅️ पिछला", callback_data=f"pg__{category}__{group_key}__{page - 1}"))
+        nav_row.append(InlineKeyboardButton(f"📄 {page + 1}/{total_pages}", callback_data="noop"))
+        if page < total_pages - 1:
+            nav_row.append(InlineKeyboardButton("अगला ➡️", callback_data=f"pg__{category}__{group_key}__{page + 1}"))
+        keyboard.append(nav_row)
 
     keyboard.append([InlineKeyboardButton("🔙 मुख्य मेनू", callback_data="btn_back_subjects")])
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    await query.message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+    if edit_in_place:
+        try:
+            await query.edit_message_text(text, reply_markup=reply_markup)
+            return
+        except Exception:
+            pass
+    await query.message.reply_text(text, reply_markup=reply_markup)
 
 # Final Selection in DM: ONLY shows "Start in Group"
-async def show_group_starter_card(query, test_type: str, group_key: str, set_key: str):
+async def show_group_starter_card(query, category: str, group_key: str, set_key: str):
     db = load_database()
-    if test_type == "mock":
-        group_data = db.get("full_mocks", {}).get(group_key, {})
-        deep_param = f"mock__{group_key}__{set_key}"
-    else:
-        group_data = db.get("subjects", {}).get(group_key, {})
-        deep_param = f"subj__{group_key}__{set_key}"
-
+    group_data = get_category_group(db, category, group_key)
     set_info = group_data.get("sets", {}).get(set_key)
     if not set_info:
         await query.message.reply_text("⚠️ सेट नहीं मिला!")
         return
 
     q_count = len(set_info.get("questions", []))
+    img_count = sum(1 for q in set_info.get("questions", []) if q.get("image"))
     t_sec = group_data.get("timer_seconds", 60)
     text = (
         "🏛️ SAGAR COACHING CENTRE\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         f"📝 {set_info['name']}\n"
-        f"❓ कुल प्रश्न: {q_count} | ⏱️ समय: {t_sec}s / प्रश्न\n"
+        f"❓ कुल प्रश्न: {q_count} | 🖼️ चित्र प्रश्न: {img_count} | ⏱️ {t_sec}s / प्रश्न\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         "👉 नीचे बटन दबाकर कोचिंग ग्रुप चुनें और टेस्ट शुरू करें:"
     )
 
+    deep_param = f"q__{category}__{group_key}__{set_key}"
     group_url = f"https://t.me/{BOT_USERNAME}?startgroup={deep_param}"
+    m = re.search(r"(\d+)", set_key)
+    back_page = (int(m.group(1)) - 1) // PAGE_SIZE if m else 0
 
     keyboard = [
         [InlineKeyboardButton("👥 Start in Group (ग्रुप चुनें और शुरू करें)", url=group_url)],
-        [InlineKeyboardButton("🔙 दूसरा सेट चुनें", callback_data=f"menu_mock_{group_key}" if test_type == "mock" else f"subj_{group_key}")]
+        [InlineKeyboardButton("🔙 दूसरा सेट चुनें", callback_data=f"pg__{category}__{group_key}__{back_page}")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    await query.message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
-
-# Subject practice sets
-async def show_subject_sets(query, subject_key: str):
-    db = load_database()
-    subjects = db.get("subjects", {})
-    subj_data = subjects.get(subject_key)
-    if not subj_data:
-        await query.message.reply_text("⚠️ विषय नहीं मिला!")
-        return
-
-    subj_name = subj_data["name"]
-    sets = subj_data.get("sets", {})
-    t_sec = subj_data.get("timer_seconds", 60)
-    chat = query.message.chat
-    is_group = chat.type in ["group", "supergroup"]
-
-    text = (
-        "🏛️ SAGAR COACHING CENTRE\n"
-        f"📝 {subj_name}\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        f"⏱️ समय: {t_sec}s / प्रश्न (50 प्रश्न प्रति सेट)\n\n"
-        "👇 जो सेट शुरू करना है, उसे चुनें:"
-    )
-
-    keyboard = []
-    set_buttons = []
-    for set_key, set_info in sets.items():
-        short_label = set_info['name'].split(" - ")[0]
-        if is_group:
-            cb = f"startsubj__{subject_key}__{set_key}"
-        else:
-            cb = f"setselect_subj__{subject_key}__{set_key}"
-            
-        set_buttons.append(
-            InlineKeyboardButton(f"📝 {short_label}", callback_data=cb)
-        )
-
-    for i in range(0, len(set_buttons), 2):
-        keyboard.append(set_buttons[i:i+2])
-
-    keyboard.append([InlineKeyboardButton("🔙 मुख्य मेनू", callback_data="btn_back_subjects")])
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    await query.message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+    await query.message.reply_text(text, reply_markup=reply_markup)
 
 # Start Group Quiz immediately
 async def start_group_quiz(chat_id: int, user, session_type: str, group_key: str, set_key: str, context: ContextTypes.DEFAULT_TYPE):
     db = load_database()
-    if session_type == "mock":
-        group_data = db.get("full_mocks", {}).get(group_key, {})
-    else:
-        group_data = db.get("subjects", {}).get(group_key, {})
+    group_data = get_category_group(db, session_type, group_key)
 
     if not group_data:
         await context.bot.send_message(chat_id=chat_id, text="⚠️ टेस्ट समूह नहीं मिला!")
@@ -384,11 +408,44 @@ async def send_next_group_question(chat_id: int, context: ContextTypes.DEFAULT_T
     q = questions[idx]
     timer = session.get("timer_seconds", 60)
 
-    q_title = f"Q{idx + 1}/{total}: {q['question']}"
-    if len(q_title) > 300:
-        q_title = q_title[:297] + "..."
+    full_q_text = f"Q{idx + 1}/{total}: {q['question']}"
+    q_overflow = len(full_q_text) > 300
+    if q_overflow:
+        q_title = full_q_text[:297] + "..."
+    else:
+        q_title = full_q_text
 
     clean_options = [opt[:100] if len(opt) > 100 else opt for opt in q["options"]]
+
+    img_rel = q.get("image")
+    img_path = (BASE_DIR / img_rel) if img_rel else None
+    if img_path and img_path.exists():
+        caption_parts = [f"🖼️ Q{idx + 1}/{total} के लिए चित्र / आकृति:"]
+        if q.get("shuffle_options") is False:
+            caption_parts.append("(विकल्प चित्र के (1)–(4) क्रम में हैं)")
+        if q_overflow:
+            caption_parts.append(f"\n\n{q['question']}")
+        caption = " ".join(caption_parts)[:1024]
+        for attempt in range(2):
+            try:
+                with open(img_path, "rb") as img_file:
+                    await context.bot.send_photo(
+                        chat_id=chat_id,
+                        photo=img_file,
+                        caption=caption,
+                    )
+                await asyncio.sleep(0.3)
+                break
+            except Exception as img_err:
+                logger.warning(f"Image send attempt {attempt + 1} failed for {img_rel}: {img_err}")
+                if attempt == 0:
+                    await asyncio.sleep(1.5)
+    elif q_overflow:
+        try:
+            await context.bot.send_message(chat_id=chat_id, text=f"📝 {full_q_text}")
+            await asyncio.sleep(0.2)
+        except Exception as msg_err:
+            logger.warning(f"Overflow header send warning: {msg_err}")
 
     try:
         message = await context.bot.send_poll(
@@ -774,12 +831,31 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("⚠️ केवल ग्रुप एडमिन ही टेस्ट शुरू या बदल सकते हैं!", show_alert=True)
             return
 
-    if data.startswith("menu_mock_"):
+    if data == "noop":
+        return
+    elif data.startswith("pg__"):
+        parts = data.split("__")
+        if len(parts) >= 4:
+            cat, grp_key, pg = parts[1], parts[2], int(parts[3])
+            # Edit in-place when paging inside category or back from starter card;
+            # keep fresh message when coming from main menu? Wait: editing in-place from main menu too is super clean!
+            await show_paginated_sets(query, cat, grp_key, pg, edit_in_place=True)
+    elif data.startswith("sel__"):
+        parts = data.split("__")
+        if len(parts) >= 4:
+            cat, grp_key, s_key = parts[1], parts[2], "__".join(parts[3:])
+            await show_group_starter_card(query, cat, grp_key, s_key)
+    elif data.startswith("go__"):
+        parts = data.split("__")
+        if len(parts) >= 4:
+            cat, grp_key, s_key = parts[1], parts[2], "__".join(parts[3:])
+            await start_group_quiz(chat.id, user, cat, grp_key, s_key, context)
+    elif data.startswith("menu_mock_"):
         mock_type = data.replace("menu_mock_", "")
-        await show_mock_sets(query, mock_type)
+        await show_paginated_sets(query, "mock", mock_type, 0)
     elif data.startswith("subj_"):
         subject_key = data.replace("subj_", "")
-        await show_subject_sets(query, subject_key)
+        await show_paginated_sets(query, "subj", subject_key, 0)
     elif data.startswith("setselect_mock"):
         mock_type, set_key = parse_compound(data, "setselect_mock")
         if mock_type and set_key:
@@ -795,7 +871,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("startsubj"):
         subject_key, set_key = parse_compound(data, "startsubj")
         if subject_key and set_key:
-            await start_group_quiz(chat.id, user, "subject", subject_key, set_key, context)
+            await start_group_quiz(chat.id, user, "subj", subject_key, set_key, context)
     elif data == "btn_back_subjects":
         await start_command(update, context)
     elif data == "btn_stats":
