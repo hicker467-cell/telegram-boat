@@ -5,6 +5,7 @@ import random
 import asyncio
 import time
 import logging
+from types import SimpleNamespace
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from telegram import Update, Poll, InlineKeyboardButton, InlineKeyboardMarkup
@@ -29,6 +30,59 @@ BASE_DIR = Path(__file__).resolve().parent
 DATABASE_FILE = BASE_DIR / "questions_db.json"
 SCORES_FILE = BASE_DIR / "scores.json"
 BOT_TOKEN = os.getenv("BOT_TOKEN", "9293701349:AAGmkCZPDO8Sxs1xDdCyEY7gz-fuV0kK5cI")
+DAILY_SCHEDULE_FILE = BASE_DIR / "daily_schedule.json"
+IST = timezone(timedelta(hours=5, minutes=30))
+
+def load_daily_schedules():
+    data = {}
+    if DAILY_SCHEDULE_FILE.exists():
+        try:
+            with open(DAILY_SCHEDULE_FILE, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+                if isinstance(loaded, dict):
+                    data = loaded
+        except Exception:
+            data = {}
+    env_cid = os.getenv("DAILY_AUTO_CHAT_ID", "").strip()
+    env_time = os.getenv("DAILY_AUTO_TIME", "").strip()
+    if env_cid and env_time and env_cid not in data:
+        parsed = parse_hhmm_ist(env_time)
+        if parsed:
+            data[env_cid] = {
+                "chat_id": int(env_cid),
+                "time": parsed[2],
+                "next_set": int(os.getenv("DAILY_AUTO_START_SET", "1") or 1),
+                "enabled": True,
+                "last_run_date": "",
+                "reminder_sent_date": "",
+            }
+    return data
+
+def save_daily_schedules(data):
+    with open(DAILY_SCHEDULE_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+def parse_hhmm_ist(raw: str):
+    m = re.fullmatch(r"(\d{1,2}):(\d{2})", (raw or "").strip())
+    if not m:
+        return None
+    hh, mm = int(m.group(1)), int(m.group(2))
+    if not (0 <= hh <= 23 and 0 <= mm <= 59):
+        return None
+    return hh, mm, f"{hh:02d}:{mm:02d}"
+
+def build_5min_reminder_text():
+    return (
+        "🏛️ SAGAR COACHING CENTRE, BHAGWANPUR\n"
+        "🎓 NMMS छात्रवृत्ति स्पेशल क्लास • ठीक 5 मिनट में!\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "👋 प्यारे छात्रों!\n\n"
+        "📖 आज के सभी 30 बेहद महत्वपूर्ण प्रश्न मेरे द्वारा लिखी गई किताब — \"NMMS स्पेशल गाइड बुक\" (जो पुस्तक आप सभी के पास है) से ही लिए गए हैं!\n\n"
+        "⏱️ हर सवाल के लिए 60 सेकंड का समय मिलेगा\n"
+        "🏆 टेस्ट पूरा होते ही Top 20 Merit List और Top 3 विजेताओं को Gold, Silver व Bronze Certificate जारी होंगे!\n\n"
+        "✍️ कॉपी-पेन लेकर तैयार हो जाइए — ठीक 5 मिनट में टेस्ट शुरू हो रहा है... देखते हैं आज कौन टॉप करता है! 🔥🏆"
+    )
+
 BOT_USERNAME = "sudhir_quiz_bot"
 
 def parse_compound(text: str, prefix: str):
@@ -375,9 +429,19 @@ async def start_group_quiz(chat_id: int, user, session_type: str, group_key: str
     context.bot_data.setdefault("group_sessions", {})[chat_id] = session
 
     display_title = clean_test_title(set_info['name'])
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text=(
+    if session_type == "mix":
+        banner_text = (
+            "🏛️ SAGAR COACHING CENTRE, BHAGWANPUR\n"
+            "🎓 NMMS स्पेशल गाइड बुक लाइव टेस्ट\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"📝 टेस्ट: {display_title}\n"
+            "📖 स्रोत: मेरे द्वारा लिखी गई NMMS स्पेशल गाइड बुक\n"
+            f"❓ कुल प्रश्न: {len(shuffled_questions)} | ⏱️ समय: {timer_seconds}s प्रति प्रश्न\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "⚡ पहला प्रश्न आ रहा है — देखते हैं आज बाज़ी कौन मारता है! 🥇🔥"
+        )
+    else:
+        banner_text = (
             "🏛️ SAGAR COACHING CENTRE\n"
             "🎓 NMMS छात्रवृत्ति महा-अभ्यास\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
@@ -386,9 +450,9 @@ async def start_group_quiz(chat_id: int, user, session_type: str, group_key: str
             "━━━━━━━━━━━━━━━━━━━━\n"
             "⚡ पहला प्रश्न आ रहा है, सभी छात्र तैयार रहें!"
         )
-    )
+    await context.bot.send_message(chat_id=chat_id, text=banner_text)
 
-    await asyncio.sleep(2.0)
+    await asyncio.sleep(5.0)
     await send_next_group_question(chat_id, context)
 
 # Send next question in group
@@ -881,6 +945,211 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "btn_help":
         await help_command(update, context)
 
+async def send_admin_private_msg(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+    """Keeps daily-scheduler confirmations invisible to group students by replying in admin's private DM."""
+    chat = update.effective_chat
+    user = update.effective_user
+    is_group = chat.type in ["group", "supergroup"]
+    if is_group:
+        try:
+            if update.message:
+                await update.message.delete()
+        except Exception:
+            pass
+        try:
+            await context.bot.send_message(chat_id=user.id, text=text)
+            return
+        except Exception:
+            pass
+    if update.message:
+        await update.message.reply_text(text)
+
+async def setdaily_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    user = update.effective_user
+    if chat.type in ["group", "supergroup"] and not await is_group_admin(chat, user.id):
+        try:
+            await update.message.delete()
+        except Exception:
+            pass
+        return
+
+    args = context.args or []
+    parsed = parse_hhmm_ist(args[0]) if args else None
+    if not parsed:
+        await send_admin_private_msg(
+            update,
+            context,
+            "⚠️ सही फॉर्मेट भेजें:\n/setdaily HH:MM (उदाहरण: /setdaily 20:00 या /setdaily 20:00 1)",
+        )
+        return
+
+    db = load_database()
+    total_sets = max(1, len(db.get("daily_mix", {}).get("Daily_Mix", {}).get("sets", {})))
+    schedules = load_daily_schedules()
+    cid_str = str(chat.id)
+    prev = schedules.get(cid_str, {})
+
+    set_num = int(prev.get("next_set", 1))
+    if len(args) >= 2 and args[1].isdigit():
+        requested = int(args[1])
+        if 1 <= requested <= total_sets:
+            set_num = requested
+
+    schedules[cid_str] = {
+        "chat_id": chat.id,
+        "time": parsed[2],
+        "next_set": set_num,
+        "enabled": True,
+        "last_run_date": "",
+        "reminder_sent_date": "",
+    }
+    save_daily_schedules(schedules)
+
+    await send_admin_private_msg(
+        update,
+        context,
+        "✅ डेली 30Q स्पेशल टेस्ट सेट हो गया!\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"🆔 ग्रुप/चैट ID: {chat.id}\n"
+        f"⏰ समय: {parsed[2]} IST\n"
+        f"📅 अगला सेट: सेट {set_num:02d} / {total_sets}\n"
+        "🔔 5-मिनट पहले क्लास संदेश: चालू",
+    )
+
+async def dailystatus_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    user = update.effective_user
+    if chat.type in ["group", "supergroup"] and not await is_group_admin(chat, user.id):
+        return
+
+    db = load_database()
+    total_sets = max(1, len(db.get("daily_mix", {}).get("Daily_Mix", {}).get("sets", {})))
+    schedules = load_daily_schedules()
+    s = schedules.get(str(chat.id))
+    if not s:
+        msg = (
+            "📅 डेली 30Q स्पेशल टेस्ट स्थिति\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "⚪ इस चैट के लिए कोई डेली शेड्यूल सेट नहीं है।\n"
+            "शुरू करने के लिए /setdaily HH:MM भेजें।"
+        )
+    else:
+        status_lbl = "🟢 चालू (Active)" if s.get("enabled", True) else "🔴 बंद (Stopped)"
+        msg = (
+            "📅 डेली 30Q स्पेशल टेस्ट स्थिति\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"{status_lbl}\n"
+            f"🆔 चैट ID: {s['chat_id']}\n"
+            f"⏰ समय: {s['time']} IST\n"
+            f"📅 अगला सेट: सेट {int(s.get('next_set', 1)):02d} / {total_sets}\n"
+            "🔔 5-मिनट पहले क्लास संदेश: चालू"
+        )
+    await send_admin_private_msg(update, context, msg)
+
+async def stopdaily_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    user = update.effective_user
+    if chat.type in ["group", "supergroup"] and not await is_group_admin(chat, user.id):
+        return
+
+    schedules = load_daily_schedules()
+    cid_str = str(chat.id)
+    if cid_str in schedules:
+        schedules[cid_str]["enabled"] = False
+        save_daily_schedules(schedules)
+        msg = (
+            "🛑 इस ग्रुप/चैट के लिए डेली 30Q टेस्ट शेड्यूल बंद कर दिया गया है।\n"
+            "(दुबारा चालू करने के लिए ग्रुप में /setdaily HH:MM लिखें।)"
+        )
+    else:
+        msg = "ℹ️ इस चैट के लिए कोई सक्रिय डेली शेड्यूल नहीं मिला।"
+    await send_admin_private_msg(update, context, msg)
+
+async def daily_scheduler_tick(app):
+    """Single non-blocking tick for IST daily 30Q scheduler (testable independently)."""
+    schedules = load_daily_schedules()
+    if not schedules:
+        return
+    db = load_database()
+    daily_sets = db.get("daily_mix", {}).get("Daily_Mix", {}).get("sets", {})
+    total_sets = len(daily_sets)
+    if total_sets == 0:
+        return
+
+    now_ist = datetime.now(IST)
+    today_str = now_ist.strftime("%Y-%m-%d")
+    active_sessions = app.bot_data.get("group_sessions", {})
+    dirty = False
+
+    for cid_str, sched in list(schedules.items()):
+        if not sched.get("enabled", True):
+            continue
+        parsed = parse_hhmm_ist(sched.get("time", ""))
+        if not parsed:
+            continue
+        hh, mm, _ = parsed
+        target_chat_id = int(sched["chat_id"])
+        target_dt = now_ist.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        diff_sec = (target_dt - now_ist).total_seconds()
+
+        # 5-minute before reminder window (between 4m and 5m05s before target)
+        if 240 <= diff_sec <= 305 and sched.get("reminder_sent_date") != today_str:
+            sched["reminder_sent_date"] = today_str
+            dirty = True
+            save_daily_schedules(schedules)
+            if target_chat_id not in active_sessions:
+                try:
+                    await app.bot.send_message(chat_id=target_chat_id, text=build_5min_reminder_text())
+                except Exception as rem_err:
+                    logger.error(f"Daily 5-min reminder failed for {target_chat_id}: {rem_err}")
+
+        # Scheduled start window (within the target minute)
+        if -60 < diff_sec <= 0 and sched.get("last_run_date") != today_str:
+            sched["last_run_date"] = today_str
+            cur_set = int(sched.get("next_set", 1))
+            if not (1 <= cur_set <= total_sets):
+                cur_set = 1
+            set_key = f"set_{cur_set}"
+            if target_chat_id in active_sessions:
+                dirty = True
+                save_daily_schedules(schedules)
+                logger.warning(f"Skipping auto daily quiz in {target_chat_id}: another quiz is already running.")
+                continue
+            sched["next_set"] = (cur_set % total_sets) + 1
+            dirty = True
+            save_daily_schedules(schedules)
+            asyncio.create_task(
+                start_group_quiz(
+                    target_chat_id,
+                    SimpleNamespace(first_name="Sagar Sir"),
+                    "mix",
+                    "Daily_Mix",
+                    set_key,
+                    app,
+                )
+            )
+
+    if dirty:
+        save_daily_schedules(schedules)
+
+async def daily_scheduler_loop(app):
+    logger.info("Daily 30Q IST scheduler loop started.")
+    while True:
+        try:
+            await daily_scheduler_tick(app)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"Daily scheduler error: {e}")
+        await asyncio.sleep(10)
+
+async def post_init(app):
+    old_task = app.bot_data.get("daily_scheduler_task")
+    if old_task and not old_task.done():
+        old_task.cancel()
+    app.bot_data["daily_scheduler_task"] = asyncio.create_task(daily_scheduler_loop(app))
+
 def start_dummy_health_server():
     """Starts a lightweight HTTP health-check server on $PORT for Render Free Web Services."""
     port_str = os.getenv("PORT")
@@ -915,7 +1184,7 @@ def main():
     
     while True:
         try:
-            app = ApplicationBuilder().token(BOT_TOKEN).build()
+            app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
 
             # Handlers
             app.add_handler(CommandHandler(["start", "startquiz"], start_command))
@@ -925,6 +1194,9 @@ def main():
             app.add_handler(CommandHandler("score", stats_command))
             app.add_handler(CommandHandler("leaderboard", leaderboard_command))
             app.add_handler(CommandHandler("help", help_command))
+            app.add_handler(CommandHandler("setdaily", setdaily_command))
+            app.add_handler(CommandHandler("dailystatus", dailystatus_command))
+            app.add_handler(CommandHandler("stopdaily", stopdaily_command))
             app.add_handler(CallbackQueryHandler(button_callback))
             app.add_handler(PollAnswerHandler(receive_quiz_answer))
 

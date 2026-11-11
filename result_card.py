@@ -203,8 +203,8 @@ def clean_test_title(raw_name: str) -> str:
     E.g. 'MAT मॉक सेट 01' -> 'MAT Full Mock Test (90 Questions)'
     """
     s = raw_name.strip()
-    if "मिक्स" in s or "Mix" in s or "30" in s:
-        return "NMMS Daily Mix Test (30 Questions)"
+    if "मिक्स" in s or "Mix" in s or "गाइड" in s or "Guide" in s or "30" in s:
+        return "NMMS Guide Book Special Test (30 Qs)"
     if "MAT" in s or "मानसिक" in s or "तर्कशक्ति" in s:
         if "90" in s or "मॉक" in s or "Mock" in s:
             return "MAT Full Mock Test (90 Questions)"
