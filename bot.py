@@ -691,9 +691,23 @@ async def finish_group_quiz(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
     if session.get("is_free_promo"):
         wa_course = "https://wa.me/919110113671?text=" + quote("नमस्ते सर, मुझे NMMS 2027-28 पूरा कोर्स जॉइन करना है। कृपया बैच और फीस की जानकारी दें।")
         wa_book = "https://wa.me/919110113671?text=" + quote("नमस्ते सर, मुझे आपके द्वारा लिखी NMMS स्पेशल गाइड बुक खरीदनी है। कृपया जानकारी दें।")
+        app_url = "https://play.google.com/store/apps/details?id=com.lct.pbxwdta"
+        web_url = "https://www.sagarcoaching.tech/"
+        wa_chan_url = "https://www.whatsapp.com/channel/0029Va5PJaVGE56lMwsSzs0g"
+        insta_url = "https://www.instagram.com/sagarcoachingcentrebhagwanpur/"
+        fb_url = "https://www.facebook.com/SagarCoachingCentreBhagwanpur59"
         promo_markup = InlineKeyboardMarkup([
             [InlineKeyboardButton("🎓 NMMS पूरा कोर्स जॉइन करें (WhatsApp)", url=wa_course)],
-            [InlineKeyboardButton("📖 NMMS स्पेशल गाइड बुक मँगवाएँ (WhatsApp)", url=wa_book)],
+            [InlineKeyboardButton("📖 NMMS गाइड बुक मँगवाएँ (WhatsApp)", url=wa_book)],
+            [
+                InlineKeyboardButton("📱 हमारा App डाउनलोड करें", url=app_url),
+                InlineKeyboardButton("🌐 Website देखें", url=web_url),
+            ],
+            [
+                InlineKeyboardButton("📢 WA Channel", url=wa_chan_url),
+                InlineKeyboardButton("📸 Instagram", url=insta_url),
+                InlineKeyboardButton("📘 Facebook", url=fb_url),
+            ],
         ])
         promo_caption = (
             "🏛️ *SAGAR COACHING CENTRE, BHAGWANPUR*\n"
@@ -703,7 +717,8 @@ async def finish_group_quiz(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
             "✅ रोज़ाना *30Q स्पेशल + 90Q फुल मॉक टेस्ट* (2,741+ PYQs)\n"
             "✅ रोज़ *Top 20 Merit Card* व विजेताओं को *Gold/Silver/Bronze Certificate* 🏆\n"
             "✅ *2021–2026 हल पेपर सहित मेरी अपनी लिखी गाइड बुक*\n\n"
-            "👇 *कोर्स जॉइन करने या किताब मँगवाने के लिए नीचे बटन दबाएँ:*\n"
+            "🌐 *www.sagarcoaching.tech* | 📱 App Google Play पर उपलब्ध\n"
+            "👇 *कोर्स, किताब और हमारे ऑफिशियल चैनल से जुड़ने के लिए बटन दबाएँ:*\n"
             "📞 WhatsApp / कॉल: +91 91101 13671"
         )
         try:
