@@ -92,7 +92,7 @@ def save_daily_schedules(data):
     _save_schedule_file(DAILY_SCHEDULE_FILE, data)
 
 def load_free_schedules():
-    return _load_schedule_file(FREE_SCHEDULE_FILE, "FREE_AUTO_CHAT_ID", "FREE_AUTO_TIME", "FREE_AUTO_START_SET", 30)
+    return _load_schedule_file(FREE_SCHEDULE_FILE, "FREE_AUTO_CHAT_ID", "FREE_AUTO_TIME", "FREE_AUTO_START_SET", 30, "-1001567537194", "19:00")
 
 def save_free_schedules(data):
     _save_schedule_file(FREE_SCHEDULE_FILE, data)
