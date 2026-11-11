@@ -713,7 +713,7 @@ async def finish_group_quiz(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
             "🏛️ *SAGAR COACHING CENTRE, BHAGWANPUR*\n"
             "🎯 *NMMS 2027-28 संपूर्ण तैयारी + स्पेशल गाइड बुक*\n\n"
             "आज आपने केवल 10 प्रश्नों का डेमो देखा — *Paid Batch* में आपको मिलता है:\n"
-            "✅ पूरा MAT + SAT सिलेबस (ट्रिक्स व क्लास नोट्स)\n"
+            "✅ *Daily Live Class* + पूरा MAT + SAT सिलेबस (ट्रिक्स व नोट्स)\n"
             "✅ रोज़ाना *30Q स्पेशल + 90Q फुल मॉक टेस्ट* (2,741+ PYQs)\n"
             "✅ रोज़ *Top 20 Merit Card* व विजेताओं को *Gold/Silver/Bronze Certificate* 🏆\n"
             "✅ *2021–2026 हल पेपर सहित मेरी अपनी लिखी गाइड बुक*\n\n"
