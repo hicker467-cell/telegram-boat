@@ -43,15 +43,21 @@ def load_daily_schedules():
                     data = loaded
         except Exception:
             data = {}
-    env_cid = os.getenv("DAILY_AUTO_CHAT_ID", "").strip()
-    env_time = os.getenv("DAILY_AUTO_TIME", "").strip()
+    env_cid = os.getenv("DAILY_AUTO_CHAT_ID", "-1001986170095").strip()
+    env_time = os.getenv("DAILY_AUTO_TIME", "17:30").strip()
     if env_cid and env_time and env_cid not in data:
         parsed = parse_hhmm_ist(env_time)
         if parsed:
+            anchor = datetime(2026, 11, 11, tzinfo=IST).date()
+            days_elapsed = max(0, (datetime.now(IST).date() - anchor).days)
+            default_set = (days_elapsed % 50) + 1
+            start_env = os.getenv("DAILY_AUTO_START_SET", "").strip()
+            if start_env.isdigit() and 1 <= int(start_env) <= 50:
+                default_set = int(start_env)
             data[env_cid] = {
                 "chat_id": int(env_cid),
                 "time": parsed[2],
-                "next_set": int(os.getenv("DAILY_AUTO_START_SET", "1") or 1),
+                "next_set": default_set,
                 "enabled": True,
                 "last_run_date": "",
                 "reminder_sent_date": "",
