@@ -694,8 +694,8 @@ async def finish_group_quiz(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
         app_url = "https://play.google.com/store/apps/details?id=com.lct.pbxwdta"
         web_url = "https://www.sagarcoaching.tech/"
         wa_chan_url = "https://www.whatsapp.com/channel/0029Va5PJaVGE56lMwsSzs0g"
-        insta_url = "https://www.instagram.com/sagarcoachingcentrebhagwanpur/"
-        fb_url = "https://www.facebook.com/SagarCoachingCentreBhagwanpur59"
+        insta_url = "https://www.instagram.com/shrvankumarsagarofficial?cplk=cHdjcDc5ZDAwdGZu"
+        fb_url = "https://www.facebook.com/share/19iESf81cj/"
         promo_markup = InlineKeyboardMarkup([
             [InlineKeyboardButton("🎓 NMMS पूरा कोर्स जॉइन करें (WhatsApp)", url=wa_course)],
             [InlineKeyboardButton("📖 NMMS गाइड बुक मँगवाएँ (WhatsApp)", url=wa_book)],
