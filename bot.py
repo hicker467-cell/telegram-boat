@@ -32,8 +32,10 @@ DATABASE_FILE = BASE_DIR / "questions_db.json"
 SCORES_FILE = BASE_DIR / "scores.json"
 BOT_TOKEN = os.getenv("BOT_TOKEN", "9293701349:AAGmkCZPDO8Sxs1xDdCyEY7gz-fuV0kK5cI")
 DAILY_SCHEDULE_FILE = BASE_DIR / "daily_schedule.json"
+NIGHT_SCHEDULE_FILE = BASE_DIR / "night_schedule.json"
 FREE_DB_FILE = BASE_DIR / "free_promo_db.json"
 FREE_SCHEDULE_FILE = BASE_DIR / "free_schedule.json"
+SUNDAY_FREE_SCHEDULE_FILE = BASE_DIR / "sunday_free_schedule.json"
 PROMO_POSTER_PATH = BASE_DIR / "assets" / "promo_poster.png"
 PAID_GROUP_CHAT_ID = -1001986170095
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -91,11 +93,35 @@ def load_daily_schedules():
 def save_daily_schedules(data):
     _save_schedule_file(DAILY_SCHEDULE_FILE, data)
 
+def load_night_schedules():
+    return _load_schedule_file(NIGHT_SCHEDULE_FILE, "NIGHT_AUTO_CHAT_ID", "NIGHT_AUTO_TIME", "NIGHT_AUTO_START_SET", 53, "-1001986170095", "20:30")
+
+def save_night_schedules(data):
+    _save_schedule_file(NIGHT_SCHEDULE_FILE, data)
+
 def load_free_schedules():
     return _load_schedule_file(FREE_SCHEDULE_FILE, "FREE_AUTO_CHAT_ID", "FREE_AUTO_TIME", "FREE_AUTO_START_SET", 30, "-1001567537194", "19:00")
 
 def save_free_schedules(data):
     _save_schedule_file(FREE_SCHEDULE_FILE, data)
+
+def load_sunday_free_schedules():
+    return _load_schedule_file(SUNDAY_FREE_SCHEDULE_FILE, "SUNDAY_FREE_CHAT_ID", "SUNDAY_FREE_TIME", "SUNDAY_FREE_START_SET", 50, "-1001567537194", "17:00")
+
+def save_sunday_free_schedules(data):
+    _save_schedule_file(SUNDAY_FREE_SCHEDULE_FILE, data)
+
+def get_ordered_subject_sets(db):
+    subs = db.get("subjects", {})
+    keys = ["Mental_Ability", "Science", "Social_Science", "Mathematics"]
+    max_len = max((len(subs.get(k, {}).get("sets", {})) for k in keys), default=0)
+    ordered = []
+    for i in range(1, max_len + 1):
+        for k in keys:
+            sk = f"set_{i}"
+            if sk in subs.get(k, {}).get("sets", {}):
+                ordered.append((k, sk))
+    return ordered
 
 def parse_hhmm_ist(raw: str):
     m = re.fullmatch(r"(\d{1,2}):(\d{2})", (raw or "").strip())
@@ -109,24 +135,48 @@ def parse_hhmm_ist(raw: str):
 def build_5min_reminder_text():
     return (
         "🏛️ SAGAR COACHING CENTRE, BHAGWANPUR\n"
-        "🎓 NMMS छात्रवृत्ति स्पेशल क्लास • ठीक 5 मिनट में!\n"
+        "🎓 NMMS छात्रवृत्ति स्पेशल क्लास (शाम 5:30 बजे) • ठीक 5 मिनट में!\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         "👋 प्यारे छात्रों!\n\n"
-        "📖 आज के सभी 30 बेहद महत्वपूर्ण प्रश्न मेरे द्वारा लिखी गई किताब — \"NMMS स्पेशल गाइड बुक\" (जो पुस्तक आप सभी के पास है) से ही लिए गए हैं!\n\n"
+        "📖 आज के सभी 30 बेहद महत्वपूर्ण प्रश्न मेरे द्वारा लिखी गई किताब — \"NMMS स्पेशल गाइड बुक\" से ही लिए गए हैं!\n\n"
         "⏱️ हर सवाल के लिए 60 सेकंड का समय मिलेगा\n"
         "🏆 टेस्ट पूरा होते ही Top 20 Merit List और Top 3 विजेताओं को Gold, Silver व Bronze Certificate जारी होंगे!\n\n"
-        "✍️ कॉपी-पेन लेकर तैयार हो जाइए — ठीक 5 मिनट में टेस्ट शुरू हो रहा है... देखते हैं आज कौन टॉप करता है! 🔥🏆"
+        "✍️ कॉपी-पेन लेकर तैयार हो जाइए — ठीक 5 मिनट में टेस्ट शुरू हो रहा है... देखते हैं आज शाम कौन टॉप करता है! 🔥🏆"
+    )
+
+def build_night_5min_reminder_text():
+    return (
+        "🏛️ SAGAR COACHING CENTRE, BHAGWANPUR\n"
+        "⚡ NMMS स्पेशल क्लास • रात का दूसरा महा-अभ्यास ठीक 5 मिनट में!\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "👋 प्यारे छात्रों!\n\n"
+        "📖 आज रात का टेस्ट: विषयवार सुपर-स्पीड अभ्यास (50 प्रश्न)!\n"
+        "⏱️ हर सवाल के लिए 30 सेकंड का समय मिलेगा (सुपर फ़ास्ट रैपिड-फ़ायर)\n"
+        "🏆 टेस्ट पूरा होते ही Top 20 Merit List और Top 3 विजेताओं को Gold, Silver व Bronze Certificate जारी होंगे!\n\n"
+        "✍️ कॉपी-पेन लेकर बैठ जाइए — ठीक 5 मिनट में टेस्ट शुरू हो रहा है... देखते हैं आज रात की ट्रॉफी किसके नाम होती है! 🔥🏆"
     )
 
 def build_free_5min_reminder_text():
     return (
         "🏛️ SAGAR COACHING CENTRE, BHAGWANPUR\n"
-        "🎓 NMMS फ्री डेमो अभ्यास • ठीक 5 मिनट में!\n"
+        "🇮🇳 भारत का No.1 NMMS चैनल • डेली लाइव डेमो टेस्ट ठीक 5 मिनट में!\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         "👋 प्यारे छात्रों!\n\n"
-        "📖 ठीक 5 मिनट बाद मेरे द्वारा लिखी गई \"NMMS स्पेशल गाइड बुक\" से चुने गए 10 महत्वपूर्ण प्रश्नों का लाइव डेमो टेस्ट शुरू होगा!\n\n"
-        "⏱️ हर सवाल: 45 सेकंड | ⚡ अंत में Top 5 नाम + पूरा कोर्स व गाइड बुक पाने की जानकारी!\n"
-        "✍️ कॉपी-पेन लेकर तैयार हो जाइए — देखते हैं आज कौन टॉप करता है! 🔥🏆"
+        "📖 ठीक 5 मिनट बाद सागर सर की \"NMMS स्पेशल गाइड बुक\" से चुने गए 10 महत्वपूर्ण प्रश्नों का लाइव टेस्ट शुरू होगा!\n\n"
+        "⏱️ हर सवाल: 45 सेकंड | ⚡ अंत में Top 10 मेरिट लिस्ट + गाइड बुक (₹350) व प्रैक्टिस सेट (₹150) घर मँगवाने की जानकारी!\n"
+        "✍️ कॉपी-पेन लेकर तैयार हो जाइए — देखते हैं आज कौन बाज़ी मारता है! 🔥🏆"
+    )
+
+def build_sunday_free_5min_reminder_text():
+    return (
+        "🏛️ SAGAR COACHING CENTRE, BHAGWANPUR\n"
+        "🏆 NMMS रविवार महा-मॉक टेस्ट (30 प्रश्न) • ठीक 5 मिनट में!\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "👋 प्यारे छात्रों एवं सम्मानित अभिभावकों!\n\n"
+        "📖 आज रविवार को ऑल-इंडिया स्तर का 30 प्रश्नों का 'रविवार महा-मॉक टेस्ट' ठीक 5 मिनट बाद शुरू हो रहा है!\n\n"
+        "⏱️ हर सवाल के लिए 60 सेकंड का समय मिलेगा\n"
+        "⚡ टेस्ट समाप्त होते ही Top 10 ऑल-इंडिया रैंकर्स की मेरिट लिस्ट जारी होगी!\n\n"
+        "✍️ कॉपी-पेन लेकर तैयार हो जाइए — आज की महा-परीक्षा में अपनी असली रैंक देखें! 🔥🏆"
     )
 
 BOT_USERNAME = "sudhir_quiz_bot"
@@ -441,7 +491,7 @@ async def show_group_starter_card(query, category: str, group_key: str, set_key:
     await query.message.reply_text(text, reply_markup=reply_markup)
 
 # Start Group Quiz immediately
-async def start_group_quiz(chat_id: int, user, session_type: str, group_key: str, set_key: str, context: ContextTypes.DEFAULT_TYPE):
+async def start_group_quiz(chat_id: int, user, session_type: str, group_key: str, set_key: str, context: ContextTypes.DEFAULT_TYPE, timer_override: int = None, is_free_promo_override: bool = None):
     db = load_database()
     group_data = get_category_group(db, session_type, group_key)
 
@@ -459,12 +509,13 @@ async def start_group_quiz(chat_id: int, user, session_type: str, group_key: str
     random.shuffle(questions)
     shuffled_questions = [shuffle_question_options(q) for q in questions]
 
-    timer_seconds = group_data.get("timer_seconds", 60)
+    timer_seconds = timer_override if timer_override is not None else group_data.get("timer_seconds", 60)
+    is_free = (session_type == "free") if is_free_promo_override is None else is_free_promo_override
 
     session = {
         "chat_id": chat_id,
         "is_group": True,
-        "is_free_promo": (session_type == "free"),
+        "is_free_promo": is_free,
         "started_by": getattr(user, "first_name", "Admin"),
         "test_name": set_info["name"],
         "timer_seconds": timer_seconds,
@@ -478,26 +529,48 @@ async def start_group_quiz(chat_id: int, user, session_type: str, group_key: str
     context.bot_data.setdefault("group_sessions", {})[chat_id] = session
 
     display_title = clean_test_title(set_info['name'])
-    if session_type == "free":
-        banner_text = (
-            "🏛️ SAGAR COACHING CENTRE, BHAGWANPUR\n"
-            "🎓 NMMS छात्रवृत्ति स्पेशल डेमो टेस्ट (10 प्रश्न)\n"
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            "📖 स्रोत: मेरे द्वारा लिखी गई NMMS स्पेशल गाइड बुक\n"
-            f"❓ कुल प्रश्न: {len(shuffled_questions)} | ⏱️ समय: {timer_seconds}s प्रति प्रश्न\n"
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            "⚡ पहला प्रश्न 5 सेकंड में आ रहा है — देखते हैं आज बाज़ी कौन मारता है! 🥇🔥"
-        )
+    if is_free:
+        if len(shuffled_questions) >= 30:
+            banner_text = (
+                "🏛️ SAGAR COACHING CENTRE, BHAGWANPUR\n"
+                "🇮🇳 भारत का No.1 NMMS चैनल • रविवार महा-मॉक टेस्ट (30 प्रश्न)\n"
+                "━━━━━━━━━━━━━━━━━━━━\n"
+                f"📝 टेस्ट: {display_title}\n"
+                "📖 स्रोत: सागर सर द्वारा रचित NMMS स्पेशल गाइड बुक\n"
+                f"❓ कुल प्रश्न: {len(shuffled_questions)} | ⏱️ समय: {timer_seconds}s प्रति प्रश्न\n"
+                "━━━━━━━━━━━━━━━━━━━━\n"
+                "⚡ पहला प्रश्न 5 सेकंड में आ रहा है — पूरे भारत के छात्र तैयार रहें! 🥇🔥"
+            )
+        else:
+            banner_text = (
+                "🏛️ SAGAR COACHING CENTRE, BHAGWANPUR\n"
+                "🇮🇳 भारत का No.1 NMMS चैनल • डेली लाइव डेमो टेस्ट (10 प्रश्न)\n"
+                "━━━━━━━━━━━━━━━━━━━━\n"
+                "📖 स्रोत: सागर सर द्वारा रचित NMMS स्पेशल गाइड बुक\n"
+                f"❓ कुल प्रश्न: {len(shuffled_questions)} | ⏱️ समय: {timer_seconds}s प्रति प्रश्न\n"
+                "━━━━━━━━━━━━━━━━━━━━\n"
+                "⚡ पहला प्रश्न 5 सेकंड में आ रहा है — देखते हैं आज बाज़ी कौन मारता है! 🥇🔥"
+            )
     elif session_type == "mix":
         banner_text = (
             "🏛️ SAGAR COACHING CENTRE, BHAGWANPUR\n"
-            "🎓 NMMS स्पेशल गाइड बुक लाइव टेस्ट\n"
+            "🎓 NMMS स्पेशल गाइड बुक लाइव टेस्ट (शाम 5:30 बजे)\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             f"📝 टेस्ट: {display_title}\n"
             "📖 स्रोत: मेरे द्वारा लिखी गई NMMS स्पेशल गाइड बुक\n"
             f"❓ कुल प्रश्न: {len(shuffled_questions)} | ⏱️ समय: {timer_seconds}s प्रति प्रश्न\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             "⚡ पहला प्रश्न आ रहा है — देखते हैं आज बाज़ी कौन मारता है! 🥇🔥"
+        )
+    elif session_type == "sub":
+        banner_text = (
+            "🏛️ SAGAR COACHING CENTRE, BHAGWANPUR\n"
+            "⚡ NMMS स्पेशल क्लास • रात का सुपर-स्पीड विषयवार अभ्यास (8:30 PM)\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"📝 विषय: {display_title}\n"
+            f"❓ कुल प्रश्न: {len(shuffled_questions)} | ⏱️ समय: {timer_seconds}s प्रति प्रश्न (रैपिड-फ़ायर)\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "⚡ पहला प्रश्न 5 सेकंड में आ रहा है — देखते हैं आज रात की ट्रॉफी कौन जीतता है! 🔥🏆"
         )
     else:
         banner_text = (
@@ -689,16 +762,20 @@ async def finish_group_quiz(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
 
     # Free Demo Group flow: keep Top 20 Merit Cards & Certificates exclusive to Paid batch; send HD Course + Book Promo Card!
     if session.get("is_free_promo"):
-        wa_course = "https://wa.me/919110113671?text=" + quote("नमस्ते सर, मुझे NMMS 2027-28 पूरा कोर्स जॉइन करना है। कृपया बैच और फीस की जानकारी दें।")
-        wa_book = "https://wa.me/919110113671?text=" + quote("नमस्ते सर, मुझे आपके द्वारा लिखी NMMS स्पेशल गाइड बुक खरीदनी है। कृपया जानकारी दें।")
+        wa_course = "https://wa.me/919110113671?text=" + quote("नमस्ते सर, मुझे All India NMMS 2027-28 का पूरा लाइव बैच (4 शिक्षक) जॉइन करना है। कृपया जानकारी दें।")
+        wa_book = "https://wa.me/919110113671?text=" + quote("नमस्ते सर, मुझे आपके द्वारा लिखी NMMS स्पेशल गाइड बुक (₹350) भारतीय डाक द्वारा घर मँगवानी है। कृपया जानकारी दें।")
+        wa_practice = "https://wa.me/919110113671?text=" + quote("नमस्ते सर, मुझे आपकी NMMS स्पेशल प्रैक्टिस सेट बुक (₹150) भारतीय डाक द्वारा घर मँगवानी है। कृपया जानकारी दें।")
         app_url = "https://play.google.com/store/apps/details?id=com.lct.pbxwdta"
         web_url = "https://www.sagarcoaching.tech/"
         wa_chan_url = "https://www.whatsapp.com/channel/0029Va5PJaVGE56lMwsSzs0g"
         insta_url = "https://www.instagram.com/shrvankumarsagarofficial?cplk=cHdjcDc5ZDAwdGZu"
         fb_url = "https://www.facebook.com/share/19iESf81cj/"
         promo_markup = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🎓 NMMS पूरा कोर्स जॉइन करें (WhatsApp)", url=wa_course)],
-            [InlineKeyboardButton("📖 NMMS गाइड बुक मँगवाएँ (WhatsApp)", url=wa_book)],
+            [InlineKeyboardButton("🎓 NMMS पूरा लाइव बैच जॉइन करें (WhatsApp)", url=wa_course)],
+            [
+                InlineKeyboardButton("📖 गाइड बुक मँगवाएँ (₹350)", url=wa_book),
+                InlineKeyboardButton("📝 प्रैक्टिस सेट मँगवाएँ (₹150)", url=wa_practice),
+            ],
             [
                 InlineKeyboardButton("📱 हमारा App डाउनलोड करें", url=app_url),
                 InlineKeyboardButton("🌐 Website देखें", url=web_url),
@@ -711,14 +788,18 @@ async def finish_group_quiz(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
         ])
         promo_caption = (
             "🏛️ *SAGAR COACHING CENTRE, BHAGWANPUR*\n"
-            "🎯 *NMMS 2027-28 संपूर्ण तैयारी + स्पेशल गाइड बुक*\n\n"
-            "आज आपने केवल 10 प्रश्नों का डेमो देखा — *Paid Batch* में आपको मिलता है:\n"
-            "✅ *Daily Live Class* + पूरा MAT + SAT सिलेबस (ट्रिक्स व नोट्स)\n"
-            "✅ रोज़ाना *30Q स्पेशल + 90Q फुल मॉक टेस्ट* (2,741+ PYQs)\n"
+            "🇮🇳 *भारत का No.1 NMMS ऑनलाइन संस्थान • Sagar Sir*\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "आज आपने डेमो टेस्ट देखा — *Paid Batch* में आपको मिलता है:\n"
+            "✅ *4 अनुभवी शिक्षकों द्वारा डेली लाइव क्लास* (MAT रीजनिंग, विज्ञान, सा.वि. व गणित)\n"
+            "✅ रोज़ाना *2 बड़े लाइव टेस्ट* — शाम 5:30 बजे (30Q) व रात 8:30 बजे (50Q रैपिड-फ़ायर)\n"
             "✅ रोज़ *Top 20 Merit Card* व विजेताओं को *Gold/Silver/Bronze Certificate* 🏆\n"
-            "✅ *2021–2026 हल पेपर सहित मेरी अपनी लिखी गाइड बुक*\n\n"
+            "✅ 2,741+ प्रश्नों का बैंक व विगत 6 वर्षों के हल पेपर\n\n"
+            "📚 *किताबें सीधे आपके घर तक (भारतीय डाक Speed Post द्वारा):*\n"
+            "📖 *NMMS स्पेशल गाइड बुक:* मात्र ₹350/-\n"
+            "📝 *स्पेशल प्रैक्टिस सेट बुक:* मात्र ₹150/-\n\n"
             "🌐 *www.sagarcoaching.tech* | 📱 App Google Play पर उपलब्ध\n"
-            "👇 *कोर्स, किताब और हमारे ऑफिशियल चैनल से जुड़ने के लिए बटन दबाएँ:*\n"
+            "👇 *कोर्स जॉइन करने या किताब घर मँगवाने के लिए नीचे दिए बटन दबाएँ:*\n"
             "📞 WhatsApp / कॉल: +91 91101 13671"
         )
         try:
@@ -1138,27 +1219,48 @@ async def dailystatus_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     db = load_database()
-    total_sets = max(1, len(db.get("daily_mix", {}).get("Daily_Mix", {}).get("sets", {})))
-    schedules = load_daily_schedules()
-    s = schedules.get(str(chat.id))
-    if not s:
-        msg = (
-            "📅 डेली 30Q स्पेशल टेस्ट स्थिति\n"
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            "⚪ इस चैट के लिए कोई डेली शेड्यूल सेट नहीं है।\n"
-            "शुरू करने के लिए /setdaily HH:MM भेजें।"
-        )
+    daily_sets = max(1, len(db.get("daily_mix", {}).get("Daily_Mix", {}).get("sets", {})))
+    ordered_subs = get_ordered_subject_sets(db)
+    sub_sets_total = max(1, len(ordered_subs))
+
+    cid_str = str(chat.id)
+    daily_scheds = load_daily_schedules()
+    night_scheds = load_night_schedules()
+
+    s_day = daily_scheds.get(cid_str)
+    s_night = night_scheds.get(cid_str)
+
+    msg = "🏛️ *SAGAR COACHING CENTRE • PAID क्लास शेड्यूल*\n━━━━━━━━━━━━━━━━━━━━\n"
+
+    # Slot 1: Evening 5:30 PM
+    if not s_day:
+        msg += "🌅 *स्लॉट 1 (शाम 5:30 PM):* ⚪ सेट नहीं है (/setdaily 17:30)\n"
     else:
-        status_lbl = "🟢 चालू (Active)" if s.get("enabled", True) else "🔴 बंद (Stopped)"
-        msg = (
-            "📅 डेली 30Q स्पेशल टेस्ट स्थिति\n"
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            f"{status_lbl}\n"
-            f"🆔 चैट ID: {s['chat_id']}\n"
-            f"⏰ समय: {s['time']} IST\n"
-            f"📅 अगला सेट: सेट {int(s.get('next_set', 1)):02d} / {total_sets}\n"
-            "🔔 5-मिनट पहले क्लास संदेश: चालू"
+        st_day = "🟢 चालू (Active)" if s_day.get("enabled", True) else "🔴 बंद (Stopped)"
+        msg += (
+            f"🌅 *स्लॉट 1 (शाम 5:30 PM):* {st_day}\n"
+            f"   ⏰ समय: {s_day['time']} IST | ⏱️ 60s/प्रश्न\n"
+            f"   📝 टेस्ट: 30Q Daily Mix (अगला: सेट {int(s_day.get('next_set', 1)):02d}/{daily_sets})\n"
+            f"   🏆 समाप्ति पर: Top 20 Merit Card + Gold/Silver/Bronze Certificates\n"
         )
+
+    msg += "\n"
+
+    # Slot 2: Night 8:30 PM
+    if not s_night:
+        msg += "🌙 *स्लॉट 2 (रात 8:30 PM):* ⚪ सेट नहीं है (/setnight 20:30)\n"
+    else:
+        st_night = "🟢 चालू (Active)" if s_night.get("enabled", True) else "🔴 बंद (Stopped)"
+        cur_night_set = int(s_night.get("next_set", 1))
+        sub_grp, sub_sk = ordered_subs[(cur_night_set - 1) % len(ordered_subs)] if ordered_subs else ("-", "-")
+        sub_title = clean_test_title(db.get("subjects", {}).get(sub_grp, {}).get("sets", {}).get(sub_sk, {}).get("name", f"{sub_grp} {sub_sk}"))
+        msg += (
+            f"🌙 *स्लॉट 2 (रात 8:30 PM):* {st_night}\n"
+            f"   ⏰ समय: {s_night['time']} IST | ⏱️ 30s/प्रश्न (सुपर-स्पीड)\n"
+            f"   📝 टेस्ट: 50Q विषयवार अभ्यास (अगला: {sub_title})\n"
+            f"   🏆 समाप्ति पर: Top 20 Merit Card + Gold/Silver/Bronze Certificates\n"
+        )
+
     await send_admin_private_msg(update, context, msg)
 
 async def stopdaily_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1173,11 +1275,83 @@ async def stopdaily_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         schedules[cid_str]["enabled"] = False
         save_daily_schedules(schedules)
         msg = (
-            "🛑 इस ग्रुप/चैट के लिए डेली 30Q टेस्ट शेड्यूल बंद कर दिया गया है।\n"
+            "🛑 इस ग्रुप के लिए शाम 5:30 PM डेली 30Q टेस्ट शेड्यूल बंद कर दिया गया है।\n"
             "(दुबारा चालू करने के लिए ग्रुप में /setdaily HH:MM लिखें।)"
         )
     else:
-        msg = "ℹ️ इस चैट के लिए कोई सक्रिय डेली शेड्यूल नहीं मिला।"
+        msg = "ℹ️ इस चैट के लिए कोई सक्रिय शाम का 30Q शेड्यूल नहीं मिला।"
+    await send_admin_private_msg(update, context, msg)
+
+async def setnight_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    user = update.effective_user
+    if chat.type in ["group", "supergroup"] and not await is_group_admin(chat, user.id):
+        try:
+            await update.message.delete()
+        except Exception:
+            pass
+        return
+
+    args = context.args or []
+    time_raw = args[0] if args else "20:30"
+    parsed = parse_hhmm_ist(time_raw)
+    if not parsed:
+        await send_admin_private_msg(
+            update,
+            context,
+            "⚠️ सही फॉर्मेट भेजें:\n/setnight HH:MM (उदाहरण: /setnight 20:30 या /setnight 20:30 1)",
+        )
+        return
+
+    db = load_database()
+    ordered_subs = get_ordered_subject_sets(db)
+    total_sets = max(1, len(ordered_subs))
+    schedules = load_night_schedules()
+    cid_str = str(chat.id)
+    prev = schedules.get(cid_str, {})
+
+    set_num = int(prev.get("next_set", 1))
+    if len(args) >= 2 and args[1].isdigit():
+        requested = int(args[1])
+        if 1 <= requested <= total_sets:
+            set_num = requested
+
+    schedules[cid_str] = {
+        "chat_id": chat.id,
+        "time": parsed[2],
+        "next_set": set_num,
+        "enabled": True,
+        "last_run_date": "",
+        "reminder_sent_date": "",
+    }
+    save_night_schedules(schedules)
+
+    await send_admin_private_msg(
+        update,
+        context,
+        f"✅ रात का 50Q विषयवार सुपर-स्पीड टेस्ट सेट हो गया!\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🆔 ग्रुप ID: {chat.id}\n"
+        f"⏰ समय: {parsed[2]} IST (30s / प्रश्न)\n"
+        f"📅 अगला सेट: सेट {set_num:02d} / {total_sets}\n"
+        f"🏆 समाप्ति पर: Top 20 Merit Card + Certificates\n"
+        f"🔔 5-मिनट पहले क्लास संदेश: चालू",
+    )
+
+async def stopnight_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    user = update.effective_user
+    if chat.type in ["group", "supergroup"] and not await is_group_admin(chat, user.id):
+        return
+
+    schedules = load_night_schedules()
+    cid_str = str(chat.id)
+    if cid_str in schedules:
+        schedules[cid_str]["enabled"] = False
+        save_night_schedules(schedules)
+        msg = "🛑 रात का 50Q टेस्ट शेड्यूल बंद कर दिया गया है।"
+    else:
+        msg = "ℹ️ इस चैट के लिए कोई सक्रिय रात का टेस्ट शेड्यूल नहीं मिला।"
     await send_admin_private_msg(update, context, msg)
 
 async def setfree_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1237,10 +1411,88 @@ async def setfree_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "✅ Free 10Q प्रोमो टेस्ट सेट हो गया!\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         f"🆔 Free ग्रुप ID: {chat.id}\n"
-        f"⏰ समय: {parsed[2]} IST (45s / प्रश्न)\n"
+        f"⏰ समय: {parsed[2]} IST (45s / प्रश्न, सोम–शनि)\n"
         f"📅 अगला सेट: सेट {set_num:02d} / {total_sets}\n"
-        "🖼️ समाप्ति पर: Top 5 स्कोर + Course & Book पोस्टर + WhatsApp बटन",
+        "🖼️ समाप्ति पर: Top 10 स्कोर + Course & Book पोस्टर + WhatsApp बटन",
     )
+
+async def setsundayfree_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    user = update.effective_user
+    if chat.type in ["group", "supergroup"] and not await is_group_admin(chat, user.id):
+        try:
+            await update.message.delete()
+        except Exception:
+            pass
+        return
+
+    if chat.id == PAID_GROUP_CHAT_ID:
+        await send_admin_private_msg(
+            update,
+            context,
+            "⚠️ यह आपका मुख्य Paid ग्रुप है! Sunday Free टेस्ट केवल Free ग्रुप में सेट करें।",
+        )
+        return
+
+    args = context.args or []
+    time_raw = args[0] if args else "17:00"
+    parsed = parse_hhmm_ist(time_raw)
+    if not parsed:
+        await send_admin_private_msg(
+            update,
+            context,
+            "⚠️ सही फॉर्मेट भेजें:\n/setsundayfree HH:MM (उदाहरण: /setsundayfree 17:00 या /setsundayfree 17:00 1)",
+        )
+        return
+
+    db = load_database()
+    total_sets = max(1, len(db.get("daily_mix", {}).get("Daily_Mix", {}).get("sets", {})))
+    schedules = load_sunday_free_schedules()
+    cid_str = str(chat.id)
+    prev = schedules.get(cid_str, {})
+
+    set_num = int(prev.get("next_set", 1))
+    if len(args) >= 2 and args[1].isdigit():
+        requested = int(args[1])
+        if 1 <= requested <= total_sets:
+            set_num = requested
+
+    schedules[cid_str] = {
+        "chat_id": chat.id,
+        "time": parsed[2],
+        "next_set": set_num,
+        "enabled": True,
+        "last_run_date": "",
+        "reminder_sent_date": "",
+    }
+    save_sunday_free_schedules(schedules)
+
+    await send_admin_private_msg(
+        update,
+        context,
+        f"✅ रविवार 30Q महा-मॉक टेस्ट सेट हो गया!\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🆔 Free ग्रुप ID: {chat.id}\n"
+        f"⏰ समय: {parsed[2]} IST (केवल प्रत्येक रविवार, 60s / प्रश्न)\n"
+        f"📅 अगला सेट: सेट {set_num:02d} / {total_sets}\n"
+        f"🖼️ समाप्ति पर: Top 10 स्कोर + Course & Book पोस्टर + WhatsApp बटन",
+    )
+
+async def stopsundayfree_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    user = update.effective_user
+    if chat.type in ["group", "supergroup"] and not await is_group_admin(chat, user.id):
+        return
+
+    schedules = load_sunday_free_schedules()
+    cid_str = str(chat.id)
+    if cid_str in schedules:
+        schedules[cid_str]["enabled"] = False
+        save_sunday_free_schedules(schedules)
+        msg = "🛑 रविवार 30Q महा-मॉक टेस्ट शेड्यूल बंद कर दिया गया है।"
+    else:
+        msg = "ℹ️ इस चैट के लिए कोई सक्रिय रविवार 30Q शेड्यूल नहीं मिला।"
+    await send_admin_private_msg(update, context, msg)
 
 async def freestatus_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
@@ -1249,21 +1501,45 @@ async def freestatus_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     free_db = load_free_database()
-    total_sets = max(1, len(free_db.get("free_promo", {}).get("Free_Demo", {}).get("sets", {})))
-    schedules = load_free_schedules()
-    s = schedules.get(str(chat.id))
-    if not s:
-        msg = "📅 Free 10Q प्रोमो टेस्ट स्थिति:\n⚪ इस चैट के लिए कोई Free डेमो शेड्यूल नहीं है। (/setfree 19:00 भेजें)"
+    demo_sets_total = max(1, len(free_db.get("free_promo", {}).get("Free_Demo", {}).get("sets", {})))
+    db = load_database()
+    mega_sets_total = max(1, len(db.get("daily_mix", {}).get("Daily_Mix", {}).get("sets", {})))
+
+    cid_str = str(chat.id)
+    free_scheds = load_free_schedules()
+    sun_scheds = load_sunday_free_schedules()
+
+    s_demo = free_scheds.get(cid_str)
+    s_sun = sun_scheds.get(cid_str)
+
+    msg = "🇮🇳 *भारत का No.1 NMMS चैनल • FREE ग्रुप शेड्यूल*\n━━━━━━━━━━━━━━━━━━━━\n"
+
+    # Daily Mon-Sat Demo
+    if not s_demo:
+        msg += "📱 *सोम-शनि डेली डेमो (7:00 PM):* ⚪ सेट नहीं है (/setfree 19:00)\n"
     else:
-        status_lbl = "🟢 चालू (Active)" if s.get("enabled", True) else "🔴 बंद (Stopped)"
-        msg = (
-            "📅 Free 10Q प्रोमो टेस्ट स्थिति\n"
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            f"{status_lbl}\n"
-            f"🆔 Free ग्रुप ID: {s['chat_id']}\n"
-            f"⏰ समय: {s['time']} IST\n"
-            f"📅 अगला सेट: सेट {int(s.get('next_set', 1)):02d} / {total_sets}"
+        st_demo = "🟢 चालू (Active)" if s_demo.get("enabled", True) else "🔴 बंद (Stopped)"
+        msg += (
+            f"📱 *सोम–शनि डेली अभ्यास (7:00 PM):* {st_demo}\n"
+            f"   ⏰ समय: {s_demo['time']} IST | ⏱️ 45s/प्रश्न\n"
+            f"   📝 टेस्ट: 10Q डेमो सेट (अगला: सेट {int(s_demo.get('next_set', 1)):02d}/{demo_sets_total})\n"
+            f"   🖼️ समाप्ति पर: Top 10 मेरिट लिस्ट + HD प्रोमो पोस्टर + WhatsApp बटन\n"
         )
+
+    msg += "\n"
+
+    # Sunday Mega Mock
+    if not s_sun:
+        msg += "🏆 *रविवार महा-मॉक टेस्ट (5:00 PM):* ⚪ सेट नहीं है (/setsundayfree 17:00)\n"
+    else:
+        st_sun = "🟢 चालू (Active)" if s_sun.get("enabled", True) else "🔴 बंद (Stopped)"
+        msg += (
+            f"🏆 *रविवार महा-मॉक टेस्ट (5:00 PM):* {st_sun}\n"
+            f"   ⏰ समय: {s_sun['time']} IST (केवल रविवार) | ⏱️ 60s/प्रश्न\n"
+            f"   📝 टेस्ट: 30Q ऑल-इंडिया महा-मॉक (अगला: सेट {int(s_sun.get('next_set', 1)):02d}/{mega_sets_total})\n"
+            f"   🖼️ समाप्ति पर: Top 10 मेरिट लिस्ट + HD प्रोमो पोस्टर + बुक (₹350/₹150) ऑर्डर बटन\n"
+        )
+
     await send_admin_private_msg(update, context, msg)
 
 async def stopfree_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1282,11 +1558,31 @@ async def stopfree_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = "ℹ️ इस चैट के लिए कोई सक्रिय Free 10Q शेड्यूल नहीं मिला।"
     await send_admin_private_msg(update, context, msg)
 
-async def _process_schedule_bucket(app, schedules: dict, save_fn, total_sets: int, session_type: str, group_key: str, reminder_fn, exclude_chat_id=None):
+async def _process_schedule_bucket(
+    app,
+    schedules: dict,
+    save_fn,
+    total_sets: int,
+    session_type: str,
+    group_key: str,
+    reminder_fn,
+    exclude_chat_id=None,
+    timer_override=None,
+    is_free_promo_override=None,
+    sunday_only=False,
+    skip_sunday=False,
+):
     if not schedules or total_sets == 0:
         return
     now_ist = datetime.now(IST)
     today_str = now_ist.strftime("%Y-%m-%d")
+    is_sun = (now_ist.weekday() == 6)
+
+    if sunday_only and not is_sun:
+        return
+    if skip_sunday and is_sun:
+        return
+
     active_sessions = app.bot_data.get("group_sessions", {})
     dirty = False
 
@@ -1318,23 +1614,35 @@ async def _process_schedule_bucket(app, schedules: dict, save_fn, total_sets: in
             cur_set = int(sched.get("next_set", 1))
             if not (1 <= cur_set <= total_sets):
                 cur_set = 1
-            set_key = f"set_{cur_set}"
+
             if target_chat_id in active_sessions:
                 dirty = True
                 save_fn(schedules)
                 logger.warning(f"Skipping {session_type} quiz in {target_chat_id}: another quiz is active.")
                 continue
+
             sched["next_set"] = (cur_set % total_sets) + 1
             dirty = True
             save_fn(schedules)
+
+            if group_key == "SUBJECT_ROTATION":
+                db = load_database()
+                ordered_subs = get_ordered_subject_sets(db)
+                real_group_key, set_key = ordered_subs[(cur_set - 1) % len(ordered_subs)]
+            else:
+                real_group_key = group_key
+                set_key = f"set_{cur_set}"
+
             asyncio.create_task(
                 start_group_quiz(
                     target_chat_id,
                     SimpleNamespace(first_name="Sagar Sir"),
                     session_type,
-                    group_key,
+                    real_group_key,
                     set_key,
                     app,
+                    timer_override=timer_override,
+                    is_free_promo_override=is_free_promo_override,
                 )
             )
 
@@ -1342,30 +1650,65 @@ async def _process_schedule_bucket(app, schedules: dict, save_fn, total_sets: in
         save_fn(schedules)
 
 async def daily_scheduler_tick(app):
-    """Runs both Paid 30Q and Free 10Q Promo IST schedulers cleanly without cross-interference."""
+    """Runs Paid 17:30 (30Q Mix), Paid 20:30 (50Q Subject Rapid), Free Sunday 17:00 (30Q Mega), and Free Mon-Sat 19:00 (10Q Demo)."""
     db = load_database()
     daily_sets = len(db.get("daily_mix", {}).get("Daily_Mix", {}).get("sets", {}))
+    ordered_subs = get_ordered_subject_sets(db)
+    free_db = load_free_database()
+    free_sets = len(free_db.get("free_promo", {}).get("Free_Demo", {}).get("sets", {}))
+
+    # 1. Paid Group Evening: 17:30 IST (30Q Daily Mix @ 60s)
     await _process_schedule_bucket(
         app,
         load_daily_schedules(),
         save_daily_schedules,
         daily_sets,
-        "mix",
-        "Daily_Mix",
-        build_5min_reminder_text,
+        session_type="mix",
+        group_key="Daily_Mix",
+        reminder_fn=build_5min_reminder_text,
+        timer_override=60,
+        is_free_promo_override=False,
     )
 
-    free_db = load_free_database()
-    free_sets = len(free_db.get("free_promo", {}).get("Free_Demo", {}).get("sets", {}))
+    # 2. Paid Group Night: 20:30 IST (50Q Subject Rapid @ 30s)
+    await _process_schedule_bucket(
+        app,
+        load_night_schedules(),
+        save_night_schedules,
+        len(ordered_subs),
+        session_type="sub",
+        group_key="SUBJECT_ROTATION",
+        reminder_fn=build_night_5min_reminder_text,
+        timer_override=30,
+        is_free_promo_override=False,
+    )
+
+    # 3. Free Group Sunday: 17:00 IST (30Q Mega Mock @ 60s - Sunday only)
+    await _process_schedule_bucket(
+        app,
+        load_sunday_free_schedules(),
+        save_sunday_free_schedules,
+        daily_sets,
+        session_type="mix",
+        group_key="Daily_Mix",
+        reminder_fn=build_sunday_free_5min_reminder_text,
+        timer_override=60,
+        is_free_promo_override=True,
+        exclude_chat_id=PAID_GROUP_CHAT_ID,
+        sunday_only=True,
+    )
+
+    # 4. Free Group Mon-Sat: 19:00 IST (10Q Demo @ 45s - Skips Sunday)
     await _process_schedule_bucket(
         app,
         load_free_schedules(),
         save_free_schedules,
         free_sets,
-        "free",
-        "Free_Demo",
-        build_free_5min_reminder_text,
+        session_type="free",
+        group_key="Free_Demo",
+        reminder_fn=build_free_5min_reminder_text,
         exclude_chat_id=PAID_GROUP_CHAT_ID,
+        skip_sunday=True,
     )
 
 async def daily_scheduler_loop(app):
@@ -1432,9 +1775,13 @@ def main():
             app.add_handler(CommandHandler("setdaily", setdaily_command))
             app.add_handler(CommandHandler("dailystatus", dailystatus_command))
             app.add_handler(CommandHandler("stopdaily", stopdaily_command))
+            app.add_handler(CommandHandler("setnight", setnight_command))
+            app.add_handler(CommandHandler("stopnight", stopnight_command))
             app.add_handler(CommandHandler("setfree", setfree_command))
             app.add_handler(CommandHandler("freestatus", freestatus_command))
             app.add_handler(CommandHandler("stopfree", stopfree_command))
+            app.add_handler(CommandHandler("setsundayfree", setsundayfree_command))
+            app.add_handler(CommandHandler("stopsundayfree", stopsundayfree_command))
             app.add_handler(CallbackQueryHandler(button_callback))
             app.add_handler(PollAnswerHandler(receive_quiz_answer))
 
