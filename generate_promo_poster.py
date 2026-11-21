@@ -32,9 +32,11 @@ def build_promo_poster():
     f_title = ImageFont.truetype(font_path, 38)
     f_sub = ImageFont.truetype(font_path, 22)
     f_bullet = ImageFont.truetype(font_path, 20)
-    f_cta = ImageFont.truetype(font_path, 19)
-    f_badge = ImageFont.truetype(font_path, 16)
-    f_small = ImageFont.truetype(font_path, 14)
+    f_cta = ImageFont.truetype(font_path, 20)
+    f_badge = ImageFont.truetype(font_path, 15)
+    f_pill2 = ImageFont.truetype(font_path, 13)
+    f_small = ImageFont.truetype(font_path, 15)
+    f_app = ImageFont.truetype(font_path, 14)
 
     # Left Panel: Book Cover Showcase
     card_x1, card_y1, card_x2, card_y2 = 60, 62, 395, 586
@@ -59,18 +61,18 @@ def build_promo_poster():
         draw.rounded_rectangle([(bx - 3, by - 3), (bx + cw + 3, by + ch + 3)], radius=8, fill=(250, 204, 21, 255))
         canvas.paste(cover_res, (bx, by), cover_res)
 
-    # Pricing & Delivery Pill
+    # Pricing & Delivery Pill (Clean Latin typography - 0 tofu boxes!)
     pill_y1 = card_y1 + 405
-    draw.rounded_rectangle([(card_x1 + 14, pill_y1), (card_x2 - 14, pill_y1 + 34)], radius=17, fill=(234, 179, 8, 255))
+    draw.rounded_rectangle([(card_x1 + 12, pill_y1), (card_x2 - 12, pill_y1 + 34)], radius=17, fill=(234, 179, 8, 255))
     p_txt = "GUIDE BOOK: ₹350  |  PRACTICE SET: ₹150"
     tw = draw.textlength(p_txt, font=f_badge)
     draw.text(((card_x1 + card_x2 - tw) / 2, pill_y1 + 7), p_txt, font=f_badge, fill=(15, 23, 42))
 
     pill_y2 = pill_y1 + 42
-    draw.rounded_rectangle([(card_x1 + 14, pill_y2), (card_x2 - 14, pill_y2 + 32)], radius=16, fill=(16, 185, 129, 230))
-    p_txt2 = "🚚 भारतीय डाक (Speed Post) द्वारा घर तक डिलीवरी"
-    tw2 = draw.textlength(p_txt2, font=f_small)
-    draw.text(((card_x1 + card_x2 - tw2) / 2, pill_y2 + 7), p_txt2, font=f_small, fill=(255, 255, 255))
+    draw.rounded_rectangle([(card_x1 + 12, pill_y2), (card_x2 - 12, pill_y2 + 32)], radius=16, fill=(16, 185, 129, 230))
+    p_txt2 = "ALL INDIA SPEED POST HOME DELIVERY"
+    tw2 = draw.textlength(p_txt2, font=f_pill2)
+    draw.text(((card_x1 + card_x2 - tw2) / 2, pill_y2 + 7), p_txt2, font=f_pill2, fill=(255, 255, 255))
 
     # Right Panel
     rx = 435
@@ -83,17 +85,17 @@ def build_promo_poster():
         hdr_x = rx
 
     draw.text((hdr_x, 60), "SAGAR COACHING CENTRE • SAGAR SIR", font=f_tag, fill=(250, 204, 21))
-    draw.text((hdr_x, 86), "🇮🇳 INDIA'S NO. 1 NMMS CHANNEL  |  www.sagarcoaching.tech", font=f_badge, fill=(186, 230, 253))
+    draw.text((hdr_x, 86), "INDIA'S NO. 1 NMMS CHANNEL  |  www.sagarcoaching.tech", font=f_badge, fill=(186, 230, 253))
 
     draw.text((rx, 134), "NMMS 2027-28 BATCH & BOOKS", font=f_title, fill=(255, 255, 255))
     draw.text((rx, 178), "4 EXPERT TEACHERS • DAILY LIVE CLASSES", font=f_sub, fill=(250, 204, 21))
     draw.line([(rx, 214), (W - 55, 214)], fill=(234, 179, 8, 120), width=2)
 
     bullets = [
-        ("4 Teachers Special Live Class", "MAT रीजनिंग + विज्ञान + सा.वि. + गणित अलग-अलग"),
-        ("Daily 2 Live Quizzes in Paid Batch", "शाम 5:30 बजे (30Q) + रात 8:30 बजे (50Q Super Speed)"),
-        ("Official Book ₹350 • Practice Set ₹150", "विगत 6 वर्षों के हल प्रश्न सहित सीधे घर तक डिलीवरी"),
-        ("Top 20 Merit List & Daily Certificates", "Gold, Silver व Bronze मेडल हर रोज़! 🏆"),
+        ("4 Teachers Special Live Class", "MAT, Science, SST & Maths Live Classes"),
+        ("Daily 2 Live Quizzes in Paid Batch", "5:30 PM (30Q Mix) & 8:30 PM (50Q Speed)"),
+        ("Official Book ₹350 • Practice Set ₹150", "2,741+ Official PYQs with Solutions"),
+        ("Top 20 Merit List & Daily Certificates", "Daily Gold, Silver & Bronze Medals"),
     ]
 
     py = 230
@@ -108,16 +110,16 @@ def build_promo_poster():
     # Bottom CTA Bar
     cta_y1, cta_y2 = 475, 532
     draw.rounded_rectangle([(rx, cta_y1), (W - 55, cta_y2)], radius=16, fill=(245, 158, 11))
-    cta_txt = "👉 किताब मँगवाएँ / कोर्स जॉइन करें  |  WhatsApp: +91 91101 13671"
+    cta_txt = "ORDER BOOK / JOIN COURSE  |  WhatsApp: +91 91101 13671"
     ctw = draw.textlength(cta_txt, font=f_cta)
     draw.text(((rx + W - 55 - ctw) / 2, cta_y1 + 16), cta_txt, font=f_cta, fill=(15, 23, 42))
 
     # Sub-bar for App
     app_y1, app_y2 = 544, 586
     draw.rounded_rectangle([(rx, app_y1), (W - 55, app_y2)], radius=14, fill=(15, 23, 42, 230), outline=(234, 179, 8, 140), width=1)
-    app_txt = "📱 Sagar Sir App on Google Play Store  •  YouTube: Sagar Coaching Centre"
-    atw = draw.textlength(app_txt, font=f_small)
-    draw.text(((rx + W - 55 - atw) / 2, app_y1 + 10), app_txt, font=f_small, fill=(203, 213, 225))
+    app_txt = "Sagar Sir App on Google Play Store  •  YouTube: Sagar Coaching Centre"
+    atw = draw.textlength(app_txt, font=f_app)
+    draw.text(((rx + W - 55 - atw) / 2, app_y1 + 11), app_txt, font=f_app, fill=(203, 213, 225))
 
     out_rgb = canvas.convert("RGB")
     out_rgb.save(OUT_PATH, quality=95)
