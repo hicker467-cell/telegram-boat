@@ -16,6 +16,8 @@ from telegram.ext import (
     CommandHandler,
     CallbackQueryHandler,
     PollAnswerHandler,
+    MessageHandler,
+    filters,
     ContextTypes
 )
 from result_card import generate_result_card, generate_topper_card, clean_test_title, resolve_student_name
@@ -39,7 +41,79 @@ FREE_SCHEDULE_FILE = BASE_DIR / "free_schedule.json"
 SUNDAY_FREE_SCHEDULE_FILE = BASE_DIR / "sunday_free_schedule.json"
 PROMO_POSTER_PATH = BASE_DIR / "assets" / "promo_poster.png"
 PAID_GROUP_CHAT_ID = -1001986170095
+FREE_GROUP_CHAT_ID = -1001567537194
 IST = timezone(timedelta(hours=5, minutes=30))
+
+# Anti-Spam Whitelist & Regex (Auto-deletes spam / promo links like A_ToolsX)
+OFFICIAL_WHITELIST = [
+    "wa.me/919110113671",
+    "api.whatsapp.com",
+    "whatsapp.com/channel/0029va5pjavgge5lmwsszs0g",
+    "sagarcoaching.tech",
+    "play.google.com/store/apps/details?id=com.lct.pbxwdta",
+    "instagram.com/shrvankumarsagarofficial",
+    "facebook.com/share/19iesf81cj",
+    "t.me/shrvankumarsagar",
+    "t.me/sagarcoachingcentrebhagwanpur",
+    "t.me/sudhir_quiz_bot",
+    "youtube.com",
+    "youtu.be",
+]
+
+SPAM_URL_REGEX = re.compile(
+    r'(?:https?://|www\.|t\.me/|telegram\.me/)[^\s]+',
+    re.IGNORECASE
+)
+
+def is_whitelisted_url(url: str) -> bool:
+    clean = url.lower().replace("https://", "").replace("http://", "").replace("www.", "")
+    for allowed in OFFICIAL_WHITELIST:
+        if clean.startswith(allowed) or allowed in clean:
+            return True
+    return False
+
+async def anti_spam_guard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Automatically intercepts and deletes unauthorized external links/spam in protected groups."""
+    message = update.effective_message
+    if not message:
+        return
+
+    chat = update.effective_chat
+    if not chat or chat.type not in ["group", "supergroup"]:
+        return
+
+    # Never delete messages sent by our own bot
+    if message.from_user and message.from_user.id == context.bot.id:
+        return
+
+    text_to_check = (message.text or "") + " " + (message.caption or "")
+    if not text_to_check.strip():
+        return
+
+    found_urls = SPAM_URL_REGEX.findall(text_to_check)
+
+    entities = list(message.entities or ()) + list(message.caption_entities or ())
+    for entity in entities:
+        if entity.type == "url":
+            raw_url = text_to_check[entity.offset:entity.offset + entity.length]
+            found_urls.append(raw_url)
+        elif entity.type == "text_link" and entity.url:
+            found_urls.append(entity.url)
+
+    if not found_urls:
+        return
+
+    has_unauthorized_link = any(not is_whitelisted_url(u) for u in found_urls)
+    if has_unauthorized_link:
+        try:
+            await message.delete()
+            logger.warning(
+                f"🛡️ Anti-Spam: Deleted unauthorized link from chat {chat.id} "
+                f"(Sender: {message.from_user.id if message.from_user else 'Unknown/Anon'}): "
+                f"{found_urls}"
+            )
+        except Exception as e_del:
+            logger.error(f"Failed to delete spam message: {e_del}")
 
 _FREE_DB_CACHE = None
 
@@ -1825,6 +1899,15 @@ def main():
     while True:
         try:
             app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
+
+            # Anti-Spam link deletion in groups (Priority group=-1)
+            app.add_handler(
+                MessageHandler(
+                    filters.ChatType.GROUPS & (filters.TEXT | filters.CAPTION | filters.Entity("url") | filters.Entity("text_link")),
+                    anti_spam_guard
+                ),
+                group=-1
+            )
 
             # Handlers
             app.add_handler(CommandHandler(["start", "startquiz"], start_command))
