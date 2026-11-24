@@ -1203,13 +1203,11 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         total_q = u_data.get("total_questions", 0)
         correct_q = u_data.get("correct_answers", 0)
-        wrong_q = max(0, total_q - correct_q)
         acc = (correct_q / total_q * 100) if total_q > 0 else 0
         text = (
             f"📊 {user.first_name} के NMMS Stats:\n\n"
             f"❓ कुल प्रश्न हल किए: {total_q}\n"
             f"✅ सही उत्तर: {correct_q}\n"
-            f"❌ गलत उत्तर: {wrong_q}\n"
             f"🎯 एक्यूरेसी (Accuracy): {acc:.1f}%"
         )
 
