@@ -803,8 +803,8 @@ async def group_question_timer(chat_id: int, poll_id: str, round_idx: int, wait_
 
 # Finish Group Quiz
 async def finish_group_quiz(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
-    # Allow 4.0s grace period for in-flight Telegram poll_answer updates to arrive from network
-    await asyncio.sleep(4.0)
+    # Allow 6.0s grace period for in-flight Telegram poll_answer updates to arrive from network
+    await asyncio.sleep(6.0)
 
     session = context.bot_data.get("group_sessions", {}).pop(chat_id, None)
     if not session:
@@ -846,25 +846,24 @@ async def finish_group_quiz(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
             "⚠️ किसी भी छात्र का स्कोर दर्ज नहीं हुआ।"
         )
     else:
-        # Calculate accurate speed and accuracy per student
+        # Calculate accurate speed and percentage per student (based on total test questions)
         for p in scores.values():
             c = p.get("correct_count", p.get("score", 0))
             ans = p.get("answered_count", c)
             if ans < c:
                 ans = c
             p["answered_count"] = ans
-            # Accuracy is percentage of answered questions that were correct
-            p["accuracy"] = round((c / ans) * 100, 1) if ans > 0 else 0.0
+            # Percentage based on total test questions (e.g. 45/50 = 90.0%)
+            p["accuracy"] = round((c / attempted) * 100, 1) if attempted > 0 else 0.0
             # Speed is average time per question answered
             t = p.get("total_time", 0.0)
             p["avg_time"] = round(t / ans, 1) if ans > 0 else 60.0
 
-        # Sort: Highest score first, tie-breaker: Accuracy %, then avg time (Fastest Finger First)
+        # Sort: Highest score first, tie-breaker: Fastest avg speed, then most attempted
         sorted_players = sorted(
             scores.values(),
-            key=lambda x: (-x["score"], -x.get("accuracy", 0.0), x.get("avg_time", 999999))
+            key=lambda x: (-x["score"], x.get("avg_time", 999999), -x.get("answered_count", 0))
         )
-        medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
 
         total_participants = len(sorted_players)
         list_label = f"टॉप 20 (कुल {total_participants} छात्रों में से)" if total_participants > 10 else f"मेरिट लिस्ट ({total_participants} छात्र)"
@@ -875,8 +874,14 @@ async def finish_group_quiz(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
             "━━━━━━━━━━━━━━━━━━━━\n"
             f"📝 टेस्ट: {clean_test_title(session['test_name'])} | कुल प्रश्न: {attempted} | कुल प्रतिभागी: {total_participants}\n\n"
         )
-        for i, p in enumerate(sorted_players[:10]):
-            m = medals[i] if i < len(medals) else f"#{i+1}"
+        # Display full Top 20 in text leaderboard
+        for i, p in enumerate(sorted_players[:20]):
+            r = i + 1
+            if r == 1: m = "🥇"
+            elif r == 2: m = "🥈"
+            elif r == 3: m = "🥉"
+            elif r <= 10: m = f"{r}️⃣"
+            else: m = f"#{r}"
             pct = p.get("accuracy", 0.0)
             avg_t = p.get("avg_time", 0.0)
             clean_name = str(p.get("name", "Student")).replace('*', '').replace('_', '').replace('`', '').strip()
@@ -1068,7 +1073,9 @@ async def finish_group_quiz(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
 async def receive_quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     answer = update.poll_answer
     poll_id = answer.poll_id
-    user = answer.user
+    user = answer.user or getattr(answer, "voter_chat", None)
+    if not user:
+        return
 
     active_polls = context.bot_data.get("active_polls", {})
     poll_info = active_polls.get(poll_id)
@@ -1088,20 +1095,28 @@ async def receive_quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
         g_scores = session["group_scores"]
         uid = str(user.id)
         if uid not in g_scores:
-            full_name = user.first_name or "Student"
-            if user.last_name:
+            full_name = getattr(user, "first_name", getattr(user, "title", "Student"))
+            if getattr(user, "last_name", None):
                 full_name += f" {user.last_name}"
             g_scores[uid] = {
                 "user_id": user.id,
                 "name": full_name,
-                "username": user.username or "",
+                "username": getattr(user, "username", "") or "",
                 "score": 0,
                 "total_time": 0.0,
                 "correct_count": 0,
-                "answered_count": 0
+                "answered_count": 0,
+                "answered_polls": set()
             }
-        elif user.username and not g_scores[uid].get("username"):
+        elif getattr(user, "username", None) and not g_scores[uid].get("username"):
             g_scores[uid]["username"] = user.username
+
+        # Deduplication: Ensure each question poll is counted exactly once per student
+        if "answered_polls" not in g_scores[uid]:
+            g_scores[uid]["answered_polls"] = set()
+        if poll_id in g_scores[uid]["answered_polls"]:
+            return
+        g_scores[uid]["answered_polls"].add(poll_id)
 
         # Pure in-memory update: microsecond execution, handles 10,000+ students without event loop blocking
         g_scores[uid]["answered_count"] = g_scores[uid].get("answered_count", 0) + 1
