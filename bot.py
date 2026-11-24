@@ -44,6 +44,51 @@ PAID_GROUP_CHAT_ID = -1001986170095
 FREE_GROUP_CHAT_ID = -1001567537194
 IST = timezone(timedelta(hours=5, minutes=30))
 
+# Persistent in-memory session and poll registry (resilient across polling reconnects)
+GLOBAL_GROUP_SESSIONS = {}
+GLOBAL_ACTIVE_POLLS = {}
+
+def get_group_session(context_or_app, chat_id: int):
+    if chat_id in GLOBAL_GROUP_SESSIONS:
+        return GLOBAL_GROUP_SESSIONS[chat_id]
+    if hasattr(context_or_app, "bot_data"):
+        return context_or_app.bot_data.get("group_sessions", {}).get(chat_id)
+    return None
+
+def set_group_session(context_or_app, chat_id: int, session: dict):
+    GLOBAL_GROUP_SESSIONS[chat_id] = session
+    if hasattr(context_or_app, "bot_data"):
+        context_or_app.bot_data.setdefault("group_sessions", {})[chat_id] = session
+
+def pop_group_session(context_or_app, chat_id: int):
+    sess1 = GLOBAL_GROUP_SESSIONS.pop(chat_id, None)
+    sess2 = None
+    if hasattr(context_or_app, "bot_data"):
+        sess2 = context_or_app.bot_data.get("group_sessions", {}).pop(chat_id, None)
+    return sess1 or sess2
+
+def set_active_poll(context_or_app, poll_id: str, poll_data: dict):
+    GLOBAL_ACTIVE_POLLS[poll_id] = poll_data
+    if hasattr(context_or_app, "bot_data"):
+        context_or_app.bot_data.setdefault("active_polls", {})[poll_id] = poll_data
+
+def get_active_poll(context_or_app, poll_id: str):
+    if poll_id in GLOBAL_ACTIVE_POLLS:
+        return GLOBAL_ACTIVE_POLLS[poll_id]
+    if hasattr(context_or_app, "bot_data"):
+        return context_or_app.bot_data.get("active_polls", {}).get(poll_id)
+    return None
+
+def remove_active_polls_for_chat(context_or_app, chat_id: int):
+    stale = [pid for pid, pinfo in list(GLOBAL_ACTIVE_POLLS.items()) if pinfo.get("chat_id") == chat_id]
+    for pid in stale:
+        GLOBAL_ACTIVE_POLLS.pop(pid, None)
+    if hasattr(context_or_app, "bot_data"):
+        bot_active = context_or_app.bot_data.get("active_polls", {})
+        stale_bot = [pid for pid, pinfo in list(bot_active.items()) if pinfo.get("chat_id") == chat_id]
+        for pid in stale_bot:
+            bot_active.pop(pid, None)
+
 # Anti-Spam Whitelist & Regex (Auto-deletes spam / promo links like A_ToolsX)
 OFFICIAL_WHITELIST = [
     "wa.me/919110113671",
@@ -622,8 +667,10 @@ async def start_group_quiz(chat_id: int, user, session_type: str, group_key: str
         return
 
     questions = list(set_info["questions"])
-    random.shuffle(questions)
-    shuffled_questions = [shuffle_question_options(q) for q in questions]
+    # In Telegram group quizzes, all students receive the identical poll simultaneously.
+    # Preserve 100% textbook question and option order (Zero option scrambling).
+    # This prevents option position confusion in diagrams (आकृति 1-4), letters (A-D), and numbers.
+    prepared_questions = [dict(q) for q in questions]
 
     timer_seconds = timer_override if timer_override is not None else group_data.get("timer_seconds", 60)
     is_free = (session_type == "free") if is_free_promo_override is None else is_free_promo_override
@@ -635,25 +682,25 @@ async def start_group_quiz(chat_id: int, user, session_type: str, group_key: str
         "started_by": getattr(user, "first_name", "Admin"),
         "test_name": set_info["name"],
         "timer_seconds": timer_seconds,
-        "questions": shuffled_questions,
+        "questions": prepared_questions,
         "current_index": 0,
-        "total": len(shuffled_questions),
+        "total": len(prepared_questions),
         "group_scores": {},
         "active_poll_id": None
     }
 
-    context.bot_data.setdefault("group_sessions", {})[chat_id] = session
+    set_group_session(context, chat_id, session)
 
     display_title = clean_test_title(set_info['name'])
     if is_free:
-        if len(shuffled_questions) >= 30:
+        if len(prepared_questions) >= 30:
             banner_text = (
                 "🏛️ SAGAR COACHING CENTRE, BHAGWANPUR\n"
                 "🇮🇳 भारत का No.1 NMMS चैनल • रविवार महा-मॉक टेस्ट (30 प्रश्न)\n"
                 "━━━━━━━━━━━━━━━━━━━━\n"
                 f"📝 टेस्ट: {display_title}\n"
                 "📖 स्रोत: सागर सर द्वारा रचित NMMS स्पेशल गाइड बुक\n"
-                f"❓ कुल प्रश्न: {len(shuffled_questions)} | ⏱️ समय: {timer_seconds}s प्रति प्रश्न\n"
+                f"❓ कुल प्रश्न: {len(prepared_questions)} | ⏱️ समय: {timer_seconds}s प्रति प्रश्न\n"
                 "━━━━━━━━━━━━━━━━━━━━\n"
                 "⚡ पहला प्रश्न 5 सेकंड में आ रहा है — पूरे भारत के छात्र तैयार रहें! 🥇🔥"
             )
@@ -663,7 +710,7 @@ async def start_group_quiz(chat_id: int, user, session_type: str, group_key: str
                 "🇮🇳 भारत का No.1 NMMS चैनल • डेली लाइव डेमो टेस्ट (10 प्रश्न)\n"
                 "━━━━━━━━━━━━━━━━━━━━\n"
                 "📖 स्रोत: सागर सर द्वारा रचित NMMS स्पेशल गाइड बुक\n"
-                f"❓ कुल प्रश्न: {len(shuffled_questions)} | ⏱️ समय: {timer_seconds}s प्रति प्रश्न\n"
+                f"❓ कुल प्रश्न: {len(prepared_questions)} | ⏱️ समय: {timer_seconds}s प्रति प्रश्न\n"
                 "━━━━━━━━━━━━━━━━━━━━\n"
                 "⚡ पहला प्रश्न 5 सेकंड में आ रहा है — देखते हैं आज बाज़ी कौन मारता है! 🥇🔥"
             )
@@ -674,7 +721,7 @@ async def start_group_quiz(chat_id: int, user, session_type: str, group_key: str
             "━━━━━━━━━━━━━━━━━━━━\n"
             f"📝 टेस्ट: {display_title}\n"
             "📖 स्रोत: मेरे द्वारा लिखी गई NMMS स्पेशल गाइड बुक\n"
-            f"❓ कुल प्रश्न: {len(shuffled_questions)} | ⏱️ समय: {timer_seconds}s प्रति प्रश्न\n"
+            f"❓ कुल प्रश्न: {len(prepared_questions)} | ⏱️ समय: {timer_seconds}s प्रति प्रश्न\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             "⚡ पहला प्रश्न आ रहा है — देखते हैं आज बाज़ी कौन मारता है! 🥇🔥"
         )
@@ -684,7 +731,7 @@ async def start_group_quiz(chat_id: int, user, session_type: str, group_key: str
             "⚡ NMMS स्पेशल क्लास • रात का सुपर-स्पीड विषयवार अभ्यास (8:30 PM)\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             f"📝 विषय: {display_title}\n"
-            f"❓ कुल प्रश्न: {len(shuffled_questions)} | ⏱️ समय: {timer_seconds}s प्रति प्रश्न (रैपिड-फ़ायर)\n"
+            f"❓ कुल प्रश्न: {len(prepared_questions)} | ⏱️ समय: {timer_seconds}s प्रति प्रश्न (रैपिड-फ़ायर)\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             "⚡ पहला प्रश्न 5 सेकंड में आ रहा है — देखते हैं आज रात की ट्रॉफी कौन जीतता है! 🔥🏆"
         )
@@ -694,7 +741,7 @@ async def start_group_quiz(chat_id: int, user, session_type: str, group_key: str
             "🎓 NMMS छात्रवृत्ति महा-अभ्यास\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             f"📝 टेस्ट: {display_title}\n"
-            f"❓ कुल प्रश्न: {len(shuffled_questions)} | ⏱️ समय: {timer_seconds}s प्रति प्रश्न\n"
+            f"❓ कुल प्रश्न: {len(prepared_questions)} | ⏱️ समय: {timer_seconds}s प्रति प्रश्न\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             "⚡ पहला प्रश्न आ रहा है, सभी छात्र तैयार रहें!"
         )
@@ -705,7 +752,7 @@ async def start_group_quiz(chat_id: int, user, session_type: str, group_key: str
 
 # Send next question in group
 async def send_next_group_question(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
-    session = context.bot_data.get("group_sessions", {}).get(chat_id)
+    session = get_group_session(context, chat_id)
     if not session:
         return
 
@@ -774,12 +821,12 @@ async def send_next_group_question(chat_id: int, context: ContextTypes.DEFAULT_T
         poll_id = message.poll.id
         session["active_poll_id"] = poll_id
 
-        context.bot_data.setdefault("active_polls", {})[poll_id] = {
+        set_active_poll(context, poll_id, {
             "chat_id": chat_id,
             "correct_option_id": q["correct_option_id"],
             "question_index": idx,
             "sent_at": time.time()
-        }
+        })
 
         # Start 60s round timer for group
         asyncio.create_task(group_question_timer(chat_id, poll_id, idx, timer, context))
@@ -793,7 +840,7 @@ async def send_next_group_question(chat_id: int, context: ContextTypes.DEFAULT_T
 async def group_question_timer(chat_id: int, poll_id: str, round_idx: int, wait_seconds: int, context: ContextTypes.DEFAULT_TYPE):
     await asyncio.sleep(wait_seconds + 0.5)
 
-    session = context.bot_data.get("group_sessions", {}).get(chat_id)
+    session = get_group_session(context, chat_id)
     if not session:
         return
 
@@ -806,15 +853,12 @@ async def finish_group_quiz(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
     # Allow 6.0s grace period for in-flight Telegram poll_answer updates to arrive from network
     await asyncio.sleep(6.0)
 
-    session = context.bot_data.get("group_sessions", {}).pop(chat_id, None)
+    session = pop_group_session(context, chat_id)
     if not session:
         return
 
     # Clean up stale active polls for this chat
-    active_polls = context.bot_data.get("active_polls", {})
-    stale_polls = [pid for pid, pinfo in active_polls.items() if pinfo.get("chat_id") == chat_id]
-    for pid in stale_polls:
-        active_polls.pop(pid, None)
+    remove_active_polls_for_chat(context, chat_id)
 
     current_idx = session.get("current_index", 0)
     total_q = session.get("total", len(session.get("questions", [])))
@@ -1077,9 +1121,7 @@ async def receive_quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not user:
         return
 
-    active_polls = context.bot_data.get("active_polls", {})
-    poll_info = active_polls.get(poll_id)
-
+    poll_info = get_active_poll(context, poll_id)
     if not poll_info:
         return
 
@@ -1090,7 +1132,7 @@ async def receive_quiz_answer(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     is_correct = bool(answer.option_ids and answer.option_ids[0] == correct_id)
 
-    session = context.bot_data.get("group_sessions", {}).get(chat_id)
+    session = get_group_session(context, chat_id)
     if session:
         g_scores = session["group_scores"]
         uid = str(user.id)
@@ -1137,7 +1179,7 @@ async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("⚠️ केवल ग्रुप एडमिन ही टेस्ट रोक सकते हैं!")
             return
 
-    session = context.bot_data.get("group_sessions", {}).get(chat.id)
+    session = get_group_session(context, chat.id)
     if not session:
         await update.message.reply_text("ℹ️ इस ग्रुप में कोई एक्टिव क्विज़ नहीं चल रहा है। नया शुरू करने के लिए `/quiz` लिखें।")
         return
@@ -1161,11 +1203,13 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         total_q = u_data.get("total_questions", 0)
         correct_q = u_data.get("correct_answers", 0)
+        wrong_q = max(0, total_q - correct_q)
         acc = (correct_q / total_q * 100) if total_q > 0 else 0
         text = (
             f"📊 {user.first_name} के NMMS Stats:\n\n"
             f"❓ कुल प्रश्न हल किए: {total_q}\n"
             f"✅ सही उत्तर: {correct_q}\n"
+            f"❌ गलत उत्तर: {wrong_q}\n"
             f"🎯 एक्यूरेसी (Accuracy): {acc:.1f}%"
         )
 
@@ -1734,7 +1778,7 @@ async def _process_schedule_bucket(
     if skip_sunday and is_sun:
         return
 
-    active_sessions = app.bot_data.get("group_sessions", {})
+    active_sessions = GLOBAL_GROUP_SESSIONS
     dirty = False
 
     for cid_str, sched in list(schedules.items()):
